@@ -15,13 +15,13 @@ import '../widgets/player_portrait_chip.dart';
 
 /// Estilo da quadra escolhido pelo usuário durante a partida.
 ///
-/// O asset embutido determina também a rotação aplicada na tela: a quadra
-/// clara (`wbk-court2.png`) já está em portrait e não precisa rotacionar;
-/// a antiga (`court.png`) é landscape e precisa de `quarterTurns: 1` para
-/// caber no container vertical.
+/// Ambos os assets atuais são landscape (1700 × 910) e precisam de
+/// `quarterTurns: 1` para caber no container portrait da tela. O campo
+/// `quarterTurns` fica configurável caso uma futura arte chegue já em
+/// orientação portrait.
 enum CourtStyle {
-  claro('Clara', 'assets/images/wbk-court2.png', 0),
-  escuro('Escura', 'assets/images/court.png', 1);
+  claro('Clara', 'assets/images/quadra1.png', 1),
+  escuro('Escura', 'assets/images/quadra2.png', 1);
 
   const CourtStyle(this.label, this.assetPath, this.quarterTurns);
 

@@ -26,6 +26,11 @@ link."
 
 ## 2.0.2 — 2026-05-28
 
+- **Novas artes de quadra (`quadra1.png` clara, `quadra2.png` escura).**
+  Substituem as antigas `court.png` e `wbk-court2.png`. Os originais
+  vieram em 4096 × 2192 (~5 MB cada) e foram redimensionados para
+  1700 × 910 (~1,1–1,5 MB) para enxugar o APK. Ambos são landscape e
+  passam pelo `quarterTurns: 1` para caber no container vertical.
 - **Placar dos cantos visível.** Os badges de placar (canto superior
   esquerdo e inferior direito da quadra) passaram a ser renderizados
   por último no Stack, ficando acima dos chips quando houver
