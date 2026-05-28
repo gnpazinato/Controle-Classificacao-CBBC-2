@@ -46,6 +46,10 @@ build/
 # Coverage
 coverage/
 
+# Test screenshots gerados por court_simulation_test.dart — regenerados a
+# cada `flutter test`, não comitar.
+test/_artifacts/
+
 # Symbols
 app.*.symbols
 app.*.map.json

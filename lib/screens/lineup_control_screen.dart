@@ -549,6 +549,7 @@ class _TabletBody extends StatelessWidget {
             state: state,
             courtStyle: courtStyle,
             onCourtStyleChanged: onCourtStyleChanged,
+            onPlayerTap: onPlayerTap,
           ),
         ),
         Expanded(
@@ -608,6 +609,7 @@ class _PhoneBody extends StatelessWidget {
                   state: state,
                   courtStyle: courtStyle,
                   onCourtStyleChanged: onCourtStyleChanged,
+                  onPlayerTap: onPlayerTap,
                 ),
                 _TeamPlayerList(
                   key: const Key('phone-team-b-list'),
@@ -827,11 +829,13 @@ class _CourtView extends StatelessWidget {
     required this.state,
     required this.courtStyle,
     required this.onCourtStyleChanged,
+    required this.onPlayerTap,
   });
 
   final MatchState state;
   final CourtStyle courtStyle;
   final ValueChanged<CourtStyle> onCourtStyleChanged;
+  final _PlayerTapCallback onPlayerTap;
 
   static const double _aspectRatio = 1504 / 2816;
 
@@ -900,9 +904,19 @@ class _CourtView extends StatelessWidget {
                       builder: (BuildContext _, BoxConstraints c) {
                 final double w = c.maxWidth;
                 final double h = c.maxHeight;
-                // Tamanhos calibrados para boa folga entre chips na quadra.
-                final double slotMaxWidth = (w * 0.22).clamp(60.0, 110.0);
-                final double slotMaxHeight = (h * 0.13).clamp(54.0, 96.0);
+                // Tudo aqui dentro escala com w/h da quadra. Sem clamps
+                // absolutos pra que tablets variados (8" portrait, 11"
+                // landscape) gerem o mesmo desenho proporcional.
+                final double slotMaxWidth = w * 0.22;
+                final double slotMaxHeight = h * 0.16;
+                // Badge dos cantos: ancorado na **largura** da quadra
+                // (não na altura). A quadra é sempre portrait, então w é
+                // a dimensão estreita e dita o quão grande os chips
+                // ficam — alinhar o badge a w faz com que ele mantenha
+                // a mesma relação visual com o chip independente da
+                // orientação do tablet.
+                final double badgeAnchor = w;
+                final double badgeMargin = badgeAnchor * 0.018;
                 return Stack(
                   alignment: Alignment.center,
                   children: <Widget>[
@@ -952,6 +966,7 @@ class _CourtView extends StatelessWidget {
                           height: h,
                           slotMaxWidth: slotMaxWidth,
                           slotMaxHeight: slotMaxHeight,
+                          onTap: () => onPlayerTap(teamA[i]!, _Side.a),
                         ),
                     for (int i = 0; i < 5; i++)
                       if (teamB[i] != null)
@@ -965,28 +980,31 @@ class _CourtView extends StatelessWidget {
                           height: h,
                           slotMaxWidth: slotMaxWidth,
                           slotMaxHeight: slotMaxHeight,
+                          onTap: () => onPlayerTap(teamB[i]!, _Side.b),
                         ),
                     // Placar espelho — canto superior esquerdo (Equipe A)
                     // e inferior direito (Equipe B). Renderizado por último
                     // pra ficar acima dos chips quando houver sobreposição.
                     Positioned(
-                      top: 6,
-                      left: 6,
+                      top: badgeMargin,
+                      left: badgeMargin,
                       child: _CourtScoreBadge(
                         total: state.totalPointsTeamA,
                         limit: state.effectiveLimitTeamA,
                         isOver: state.isTeamAOverLimit,
                         bonusActive: state.hasBonusInCourtTeamA,
+                        anchor: badgeAnchor,
                       ),
                     ),
                     Positioned(
-                      bottom: 6,
-                      right: 6,
+                      bottom: badgeMargin,
+                      right: badgeMargin,
                       child: _CourtScoreBadge(
                         total: state.totalPointsTeamB,
                         limit: state.effectiveLimitTeamB,
                         isOver: state.isTeamBOverLimit,
                         bonusActive: state.hasBonusInCourtTeamB,
+                        anchor: badgeAnchor,
                       ),
                     ),
                   ],
@@ -1096,6 +1114,7 @@ class _CourtScoreBadge extends StatelessWidget {
     required this.limit,
     required this.isOver,
     required this.bonusActive,
+    required this.anchor,
   });
 
   final double total;
@@ -1103,14 +1122,29 @@ class _CourtScoreBadge extends StatelessWidget {
   final bool isOver;
   final bool bonusActive;
 
+  /// Dimensão de referência (menor lado da quadra). Tudo aqui é definido
+  /// como % desse ancoramento, então o badge encolhe junto com a quadra
+  /// em telas pequenas e cresce em tablets grandes.
+  final double anchor;
+
   @override
   Widget build(BuildContext context) {
     final Color totalColor =
         isOver ? CbbcColors.alertRed : CbbcColors.blueDeep;
+    // Dimensões proporcionais à largura da quadra. Calibrado para que o
+    // badge nunca invada a área dos chips dos cantos (front line em
+    // x ≈ 0.22; chip metade-largura ≈ 0.11 → badge limitado a ~0.10 da
+    // largura da quadra).
+    final double fontTotal = (anchor * 0.034).clamp(11.0, 22.0);
+    final double fontLimit = fontTotal * 0.78;
+    final double padH = (anchor * 0.022).clamp(6.0, 14.0);
+    final double padV = (anchor * 0.014).clamp(3.0, 8.0);
+    final double iconSize = fontTotal * 0.95;
+    final double radius = (anchor * 0.022).clamp(7.0, 12.0);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
@@ -1120,7 +1154,7 @@ class _CourtScoreBadge extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(radius),
         boxShadow: <BoxShadow>[
           // Sombra "botão flutuante" — mesmo padrão dos chips.
           BoxShadow(
@@ -1144,7 +1178,7 @@ class _CourtScoreBadge extends StatelessWidget {
             total.toStringAsFixed(1),
             style: TextStyle(
               color: totalColor,
-              fontSize: 15,
+              fontSize: fontTotal,
               fontWeight: FontWeight.w900,
               height: 1,
               fontFeatures: const <FontFeature>[
@@ -1154,21 +1188,21 @@ class _CourtScoreBadge extends StatelessWidget {
           ),
           Text(
             ' / ${limit.toStringAsFixed(1)}',
-            style: const TextStyle(
+            style: TextStyle(
               color: CbbcColors.textSecondary,
-              fontSize: 13,
+              fontSize: fontLimit,
               fontWeight: FontWeight.w600,
               height: 1,
-              fontFeatures: <FontFeature>[
+              fontFeatures: const <FontFeature>[
                 FontFeature.tabularFigures(),
               ],
             ),
           ),
           if (bonusActive) ...<Widget>[
-            const SizedBox(width: 5),
-            const Icon(
+            SizedBox(width: padH * 0.4),
+            Icon(
               Icons.star,
-              size: 14,
+              size: iconSize,
               color: CbbcColors.orange,
             ),
           ],
@@ -1215,6 +1249,7 @@ class _CourtPlayerSlot extends StatelessWidget {
     required this.height,
     required this.slotMaxWidth,
     required this.slotMaxHeight,
+    required this.onTap,
   });
 
   final Player player;
@@ -1225,6 +1260,7 @@ class _CourtPlayerSlot extends StatelessWidget {
   final double height;
   final double slotMaxWidth;
   final double slotMaxHeight;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1233,41 +1269,15 @@ class _CourtPlayerSlot extends StatelessWidget {
       top: height * target.dy,
       child: FractionalTranslation(
         translation: const Offset(-0.5, -0.5),
-        child: _CourtPlayerChip(
+        child: PlayerPortraitChip(
           player: player,
           jerseyColor: jerseyColor,
           isBonusEligible: isBonusEligible,
           maxWidth: slotMaxWidth,
           maxHeight: slotMaxHeight,
+          onTap: onTap,
         ),
       ),
-    );
-  }
-}
-
-class _CourtPlayerChip extends StatelessWidget {
-  const _CourtPlayerChip({
-    required this.player,
-    required this.jerseyColor,
-    required this.isBonusEligible,
-    required this.maxWidth,
-    required this.maxHeight,
-  });
-
-  final Player player;
-  final JerseyColor jerseyColor;
-  final bool isBonusEligible;
-  final double maxWidth;
-  final double maxHeight;
-
-  @override
-  Widget build(BuildContext context) {
-    return PlayerPortraitChip(
-      player: player,
-      jerseyColor: jerseyColor,
-      isBonusEligible: isBonusEligible,
-      maxWidth: maxWidth,
-      maxHeight: maxHeight,
     );
   }
 }

@@ -24,6 +24,46 @@ link."
 
 ---
 
+## 2.1.0 — 2026-05-28
+
+- **Quadra interativa: toque na foto da jogadora pra remover.** Antes só
+  dava pra remover pela lista lateral. Agora a quadra é totalmente
+  interativa — o mesmo `togglePlayer` é disparado pelo chip em quadra
+  com `InkWell` recortado no formato do retrato. Funciona em paralelo
+  com o tap nas listas laterais (não substitui — soma).
+- **Enquadramento padronizado das fotos.** Algoritmo de crop facial
+  reescrito para sempre mostrar **rosto + pescoço + ombros + um pouco
+  da camiseta**, com escala derivada da largura da cabeça detectada
+  (não mais da altura total do sujeito). Atletas que ficavam coladas
+  no rosto (Gabriela 21, Geisa 22, Maria do Carmo 89) passam a sair
+  com o mesmo "tamanho aparente" das que já estavam boas (Ivanilde 4,
+  Paola 41, Bruna 9, Adrienne 11). Mínimo 38 % e máximo 65 % da altura
+  da foto pra evitar crops minúsculos quando a detecção falhar.
+- **Badge da classe na cor da camiseta, sem borda, deslocado pra cima.**
+  O retângulo branco com a classe da atleta passou a:
+  1. usar `JerseyColor.fill` (mesma cor que o número da camisa) com
+     o número da classe pintado em `numberColor`;
+  2. perder a borda branca e a estria azul vertical — só uma sombra sutil;
+  3. subir 14 % da altura do chip (de `top: 0.18 × h` pra `0.04 × h`)
+     e deslocar mais pra esquerda (de `-55 %` pra `-70 %` do badge),
+     longe do rosto da atleta.
+- **Layout responsivo da quadra.** Tudo dentro do retângulo da quadra
+  escala em **percentual da largura da quadra** (não mais em pixels
+  fixos): score badge dos cantos com `fontSize = w × 0.034`,
+  `padding = w × 0.022 × 0.014`, `margem = w × 0.018`; chips com
+  `slotMaxWidth = w × 0.22` e `slotMaxHeight = h × 0.16` sem clamps
+  absolutos. Em tablets paisagem (~400 px de largura de quadra) e
+  retrato (~600 px), o badge fica proporcional aos chips e não invade
+  a foto das atletas das extremidades.
+- **Testes de layout responsivo + screenshots automáticos.** Novo
+  `test/court_simulation_test.dart` renderiza a quadra simulada em
+  quatro viewports (320×600, 400×750, 600×1124, 800×1500) e valida
+  geometricamente que os score badges não sobrepõem os chips das
+  extremidades. Cada teste exporta um PNG em `test/_artifacts/` pra
+  inspeção visual antes do build do APK. Novo
+  `test/lineup_layout_test.dart` valida que `onTap` no chip dispara
+  callback e que badges escalam com o tamanho do chip.
+
 ## 2.0.4 — 2026-05-28
 
 - **Linha de fundo das duas equipes mais próxima do centro.** As 2
