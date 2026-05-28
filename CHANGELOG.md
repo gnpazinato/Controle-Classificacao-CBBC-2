@@ -24,6 +24,35 @@ link."
 
 ---
 
+## 2.0.0 — 2026-05-28
+
+- **Design moderno de transmissão (Broadcast Style).** Renovação visual
+  dos chips dos atletas em quadra, pensados para transmissões de
+  partidas no YouTube/streaming.
+- **Adeus moldura grossa.** Remoção da borda branca espessa ao redor das
+  fotos, substituída por contorno milimétrico em cinza-slate e sombra
+  projetada com `MaskFilter.blur` que dá efeito de flutuação sobre a
+  quadra.
+- **Badges tridimensionais ampliados (~15%).** Aumento proporcional das
+  fotos e badges. O indicador de classe funcional ganhou gradiente
+  off-white, formato com cantos assimétricos e faixa lateral em azul
+  cobalto (estilo placar esportivo); o número da camisa virou círculo
+  perfeito de alto contraste.
+- **Estrela de bonificação premium.** O indicador de bônus em quadra
+  passou a usar gradiente laranja-basquete, estrela interna branca e
+  glow suave ao redor.
+- **Nova quadra amadeirada (clara) e Auto Broadcast Dim.** A quadra
+  padrão passa a ser `assets/images/wbk-court2.png` (piso claro, garrafões
+  em azul cobalto, círculo central azul); a antiga `court.png` segue no
+  projeto reservada para um futuro seletor de tema claro/escuro em
+  tempo real. Novo filtro inteligente: quando há atletas em quadra, o
+  piso é levemente esmaecido (76 % de opacidade + overlay off-white)
+  para priorizar a leitura de rostos, nomes e números na transmissão;
+  quadra vazia continua em opacidade cheia.
+- **Avatar de fallback CBBC.** Atletas sem foto importada agora aparecem
+  em gradiente azul cobalto institucional com iniciais brancas em vez do
+  fundo cinza neutro.
+
 ## 0.5.0 — 2026-05-28
 
 - **Fotos dos atletas em quadra.** Chips da quadra passam a usar retrato

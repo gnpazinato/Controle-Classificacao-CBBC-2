@@ -752,7 +752,7 @@ class _PlayerCard extends StatelessWidget {
   }
 }
 
-const String kCourtAsset = 'assets/images/court.png';
+const String kCourtAsset = 'assets/images/wbk-court2.png';
 
 class _CourtView extends StatelessWidget {
   const _CourtView({required this.state});
@@ -783,6 +783,7 @@ class _CourtView extends StatelessWidget {
     final List<Player?> teamB = state.teamBSlotPlayers;
     final bool teamAEmpty = teamA.every((Player? p) => p == null);
     final bool teamBEmpty = teamB.every((Player? p) => p == null);
+    final bool hasAnyPlayerOnCourt = !teamAEmpty || !teamBEmpty;
 
     return Center(
       key: const Key('court-view'),
@@ -808,20 +809,43 @@ class _CourtView extends StatelessWidget {
               builder: (BuildContext _, BoxConstraints c) {
                 final double w = c.maxWidth;
                 final double h = c.maxHeight;
-                final double slotMaxWidth = (w * 0.24).clamp(58.0, 104.0);
-                final double slotMaxHeight = (h * 0.13).clamp(52.0, 92.0);
+                // Slots ~13% maiores para protagonismo dos chips em transmissão.
+                final double slotMaxWidth = (w * 0.27).clamp(66.0, 118.0);
+                final double slotMaxHeight = (h * 0.15).clamp(58.0, 104.0);
                 return Stack(
                   alignment: Alignment.center,
                   children: <Widget>[
-                    const Positioned.fill(
-                      child: RotatedBox(
-                        quarterTurns: 1,
-                        child: Image(
-                          image: AssetImage(kCourtAsset),
-                          fit: BoxFit.cover,
+                    // Auto Broadcast Dim: só aplica Opacity quando há
+                    // atletas em quadra, evitando pass de composição à toa.
+                    if (hasAnyPlayerOnCourt)
+                      const Positioned.fill(
+                        child: Opacity(
+                          opacity: 0.76,
+                          child: RotatedBox(
+                            quarterTurns: 1,
+                            child: Image(
+                              image: AssetImage(kCourtAsset),
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      const Positioned.fill(
+                        child: RotatedBox(
+                          quarterTurns: 1,
+                          child: Image(
+                            image: AssetImage(kCourtAsset),
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
-                    ),
+                    if (hasAnyPlayerOnCourt)
+                      Positioned.fill(
+                        child: ColoredBox(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                      ),
                     if (teamAEmpty)
                       Align(
                         alignment: const Alignment(0, -0.55),

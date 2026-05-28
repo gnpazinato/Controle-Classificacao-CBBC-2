@@ -26,10 +26,13 @@ class PlayerPortraitChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final double chipHeight = maxHeight.clamp(46.0, 96.0).toDouble();
+    final double chipHeight = maxHeight.clamp(52.0, 108.0).toDouble();
     final double chipWidth = math.min(maxWidth, chipHeight * 0.84);
-    final double badgeSize =
-        (chipHeight * 0.24).clamp(16.0, 24.0).toDouble();
+
+    final double classBadgeSize =
+        (chipHeight * 0.30).clamp(22.0, 32.0).toDouble();
+    final double jerseyBadgeSize =
+        (chipHeight * 0.28).clamp(20.0, 30.0).toDouble();
     final String? photoUrl = player.photoUrl;
 
     return SizedBox(
@@ -50,52 +53,27 @@ class PlayerPortraitChip extends StatelessWidget {
                 ),
               ),
               Positioned(
-                left: -badgeSize * 0.18,
+                left: -classBadgeSize * 0.18,
                 top: chipHeight * 0.18,
-                child: _MetricBadge(
+                child: _ClassBadge(
                   text: player.playerClass?.toStringAsFixed(1) ?? '—',
-                  size: badgeSize,
-                  backgroundColor: Colors.white,
-                  foregroundColor: CbbcColors.textPrimary,
-                  borderColor: CbbcColors.slate200,
+                  size: classBadgeSize,
                 ),
               ),
               Positioned(
-                right: -badgeSize * 0.14,
+                right: -jerseyBadgeSize * 0.14,
                 bottom: chipHeight * 0.12,
-                child: _MetricBadge(
+                child: _JerseyBadge(
                   text: player.shirtNumber.toString(),
-                  size: badgeSize,
-                  backgroundColor: jerseyColor.fill,
-                  foregroundColor: jerseyColor.numberColor,
-                  borderColor: jerseyColor.numberColor.withValues(alpha: 0.65),
+                  size: jerseyBadgeSize,
+                  jerseyColor: jerseyColor,
                 ),
               ),
               if (isBonusEligible)
                 Positioned(
-                  right: -badgeSize * 0.08,
-                  top: -badgeSize * 0.10,
-                  child: Container(
-                    width: badgeSize * 0.88,
-                    height: badgeSize * 0.88,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      shape: BoxShape.circle,
-                      border: Border.all(color: CbbcColors.orange, width: 1),
-                      boxShadow: <BoxShadow>[
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.18),
-                          blurRadius: 4,
-                          offset: const Offset(0, 1),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.star,
-                      size: badgeSize * 0.58,
-                      color: CbbcColors.orange,
-                    ),
-                  ),
+                  right: -jerseyBadgeSize * 0.08,
+                  top: -jerseyBadgeSize * 0.10,
+                  child: _BonusStarBadge(size: jerseyBadgeSize * 0.88),
                 ),
             ],
           ),
@@ -266,7 +244,7 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     return CustomPaint(
       painter: _PortraitFramePainter(),
       child: Padding(
-        padding: const EdgeInsets.all(3),
+        padding: const EdgeInsets.all(1.0),
         child: ClipPath(
           clipper: _PortraitClipper(),
           child: future == null
@@ -300,13 +278,19 @@ class _PortraitFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: CbbcColors.slate100,
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: <Color>[CbbcColors.blue, CbbcColors.blueDeep],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
       child: Center(
         child: Text(
           initials,
           style: const TextStyle(
-            color: CbbcColors.blueDeep,
+            color: Colors.white,
             fontWeight: FontWeight.w900,
             height: 1,
           ),
@@ -316,20 +300,83 @@ class _PortraitFallback extends StatelessWidget {
   }
 }
 
-class _MetricBadge extends StatelessWidget {
-  const _MetricBadge({
+class _ClassBadge extends StatelessWidget {
+  const _ClassBadge({required this.text, required this.size});
+
+  final String text;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size * 1.15,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: <Color>[Colors.white, Color(0xFFF1F5F9)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(size * 0.20),
+          topRight: Radius.circular(size * 0.20),
+          bottomRight: Radius.circular(size * 0.20),
+          bottomLeft: Radius.zero,
+        ),
+        border: Border.all(color: Colors.white, width: 1.2),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.24),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: <Widget>[
+          Positioned(
+            left: 0,
+            top: size * 0.18,
+            bottom: size * 0.18,
+            child: Container(
+              width: 2.2,
+              decoration: const BoxDecoration(
+                color: CbbcColors.blue,
+                borderRadius:
+                    BorderRadius.horizontal(right: Radius.circular(1)),
+              ),
+            ),
+          ),
+          Center(
+            child: Padding(
+              padding: EdgeInsets.only(left: size * 0.08),
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: CbbcColors.textPrimary,
+                  fontSize: size * 0.46,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _JerseyBadge extends StatelessWidget {
+  const _JerseyBadge({
     required this.text,
     required this.size,
-    required this.backgroundColor,
-    required this.foregroundColor,
-    required this.borderColor,
+    required this.jerseyColor,
   });
 
   final String text;
   final double size;
-  final Color backgroundColor;
-  final Color foregroundColor;
-  final Color borderColor;
+  final JerseyColor jerseyColor;
 
   @override
   Widget build(BuildContext context) {
@@ -337,14 +384,17 @@ class _MetricBadge extends StatelessWidget {
       width: size,
       height: size,
       decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(size * 0.16),
-        border: Border.all(color: borderColor, width: 1),
+        color: jerseyColor.fill,
+        shape: BoxShape.circle,
+        border: Border.all(
+          color: jerseyColor.numberColor.withValues(alpha: 0.8),
+          width: 1.5,
+        ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.20),
-            blurRadius: 4,
-            offset: const Offset(0, 1),
+            color: Colors.black.withValues(alpha: 0.26),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -352,12 +402,12 @@ class _MetricBadge extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.scaleDown,
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: size * 0.08),
+          padding: EdgeInsets.all(size * 0.08),
           child: Text(
             text,
             style: TextStyle(
-              color: foregroundColor,
-              fontSize: size * 0.50,
+              color: jerseyColor.numberColor,
+              fontSize: size * 0.52,
               fontWeight: FontWeight.w900,
               height: 1,
               fontFeatures: const <ui.FontFeature>[
@@ -366,6 +416,42 @@ class _MetricBadge extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _BonusStarBadge extends StatelessWidget {
+  const _BonusStarBadge({required this.size});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: <Color>[CbbcColors.orange, Color(0xFFF97316)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 1.2),
+        boxShadow: <BoxShadow>[
+          BoxShadow(
+            color: CbbcColors.orange.withValues(alpha: 0.48),
+            blurRadius: 6,
+            spreadRadius: 1,
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Icon(
+        Icons.star,
+        size: size * 0.56,
+        color: Colors.white,
       ),
     );
   }
@@ -401,7 +487,12 @@ class _PortraitFramePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final Path path = _portraitPath(size);
-    canvas.drawShadow(path, Colors.black.withValues(alpha: 0.26), 4, false);
+
+    final Paint shadowPaint = Paint()
+      ..color = Colors.black.withValues(alpha: 0.28)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5)
+      ..style = PaintingStyle.fill;
+    canvas.drawPath(path.shift(const Offset(0, 2)), shadowPaint);
 
     final Paint fill = Paint()
       ..color = Colors.white
@@ -410,9 +501,9 @@ class _PortraitFramePainter extends CustomPainter {
     canvas.drawPath(path, fill);
 
     final Paint stroke = Paint()
-      ..color = Colors.white
+      ..color = CbbcColors.slate200
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.2
+      ..strokeWidth = 1.0
       ..isAntiAlias = true;
     canvas.drawPath(path, stroke);
   }
