@@ -831,19 +831,19 @@ class _CourtView extends StatelessWidget {
   // de fundo com 2 atletas mais afastados, garantindo folga no meio campo
   // entre as duas equipes.
   static const List<Offset> _teamATargets = <Offset>[
-    Offset(0.20, 0.10),
-    Offset(0.50, 0.10),
-    Offset(0.80, 0.10),
-    Offset(0.32, 0.30),
-    Offset(0.68, 0.30),
+    Offset(0.28, 0.13),
+    Offset(0.50, 0.13),
+    Offset(0.72, 0.13),
+    Offset(0.36, 0.31),
+    Offset(0.64, 0.31),
   ];
 
   static const List<Offset> _teamBTargets = <Offset>[
-    Offset(0.20, 0.90),
-    Offset(0.50, 0.90),
-    Offset(0.80, 0.90),
-    Offset(0.32, 0.70),
-    Offset(0.68, 0.70),
+    Offset(0.28, 0.87),
+    Offset(0.50, 0.87),
+    Offset(0.72, 0.87),
+    Offset(0.36, 0.69),
+    Offset(0.64, 0.69),
   ];
 
   @override
@@ -929,10 +929,38 @@ class _CourtView extends StatelessWidget {
                           text: 'Toque nos atletas da ${state.teamB.displayName}',
                         ),
                       ),
+                    // Chips em quadra. Key estável por atleta evita que a
+                    // remoção de uma jogadora reaproveite o slot de outra
+                    // (causa do "flash" de várias fotos ao tirar atleta).
+                    for (int i = 0; i < 5; i++)
+                      if (teamA[i] != null)
+                        _CourtPlayerSlot(
+                          key: ValueKey<String>('court-a-${teamA[i]!.id}'),
+                          player: teamA[i]!,
+                          jerseyColor: state.teamAJerseyColor,
+                          isBonusEligible: state.qualifiesForBonus(teamA[i]!),
+                          target: _teamATargets[i],
+                          width: w,
+                          height: h,
+                          slotMaxWidth: slotMaxWidth,
+                          slotMaxHeight: slotMaxHeight,
+                        ),
+                    for (int i = 0; i < 5; i++)
+                      if (teamB[i] != null)
+                        _CourtPlayerSlot(
+                          key: ValueKey<String>('court-b-${teamB[i]!.id}'),
+                          player: teamB[i]!,
+                          jerseyColor: state.teamBJerseyColor,
+                          isBonusEligible: state.qualifiesForBonus(teamB[i]!),
+                          target: _teamBTargets[i],
+                          width: w,
+                          height: h,
+                          slotMaxWidth: slotMaxWidth,
+                          slotMaxHeight: slotMaxHeight,
+                        ),
                     // Placar espelho — canto superior esquerdo (Equipe A)
-                    // e inferior direito (Equipe B). Acompanha o overlay
-                    // de transmissão e fica visível na cor de alerta
-                    // quando estoura o limite (sem texto extra).
+                    // e inferior direito (Equipe B). Renderizado por último
+                    // pra ficar acima dos chips quando houver sobreposição.
                     Positioned(
                       top: 6,
                       left: 6,
@@ -953,30 +981,6 @@ class _CourtView extends StatelessWidget {
                         bonusActive: state.hasBonusInCourtTeamB,
                       ),
                     ),
-                    for (int i = 0; i < 5; i++)
-                      if (teamA[i] != null)
-                        _CourtPlayerSlot(
-                          player: teamA[i]!,
-                          jerseyColor: state.teamAJerseyColor,
-                          isBonusEligible: state.qualifiesForBonus(teamA[i]!),
-                          target: _teamATargets[i],
-                          width: w,
-                          height: h,
-                          slotMaxWidth: slotMaxWidth,
-                          slotMaxHeight: slotMaxHeight,
-                        ),
-                    for (int i = 0; i < 5; i++)
-                      if (teamB[i] != null)
-                        _CourtPlayerSlot(
-                          player: teamB[i]!,
-                          jerseyColor: state.teamBJerseyColor,
-                          isBonusEligible: state.qualifiesForBonus(teamB[i]!),
-                          target: _teamBTargets[i],
-                          width: w,
-                          height: h,
-                          slotMaxWidth: slotMaxWidth,
-                          slotMaxHeight: slotMaxHeight,
-                        ),
                   ],
                 );
               },
@@ -1095,31 +1099,33 @@ class _CourtScoreBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final Color totalColor =
         isOver ? CbbcColors.alertRed : CbbcColors.blueDeep;
-    final Color borderColor = isOver
-        ? CbbcColors.alertRed
-        : CbbcColors.blue.withValues(alpha: 0.55);
     return AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: <Color>[
-            Colors.white.withValues(alpha: 0.96),
-            const Color(0xFFF1F5F9).withValues(alpha: 0.96),
+            Colors.white.withValues(alpha: 0.97),
+            const Color(0xFFF1F5F9).withValues(alpha: 0.97),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor, width: isOver ? 1.8 : 1.2),
+        borderRadius: BorderRadius.circular(10),
         boxShadow: <BoxShadow>[
+          // Sombra "botão flutuante" — mesmo padrão dos chips.
           BoxShadow(
-            color: (isOver ? CbbcColors.alertRed : Colors.black)
-                .withValues(alpha: isOver ? 0.35 : 0.22),
-            blurRadius: isOver ? 8 : 5,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.40),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
+          if (isOver)
+            BoxShadow(
+              color: CbbcColors.alertRed.withValues(alpha: 0.45),
+              blurRadius: 10,
+              spreadRadius: 1,
+            ),
         ],
       ),
       child: Row(
@@ -1130,7 +1136,7 @@ class _CourtScoreBadge extends StatelessWidget {
             total.toStringAsFixed(1),
             style: TextStyle(
               color: totalColor,
-              fontSize: 13,
+              fontSize: 15,
               fontWeight: FontWeight.w900,
               height: 1,
               fontFeatures: const <FontFeature>[
@@ -1142,7 +1148,7 @@ class _CourtScoreBadge extends StatelessWidget {
             ' / ${limit.toStringAsFixed(1)}',
             style: const TextStyle(
               color: CbbcColors.textSecondary,
-              fontSize: 11,
+              fontSize: 13,
               fontWeight: FontWeight.w600,
               height: 1,
               fontFeatures: <FontFeature>[
@@ -1151,10 +1157,10 @@ class _CourtScoreBadge extends StatelessWidget {
             ),
           ),
           if (bonusActive) ...<Widget>[
-            const SizedBox(width: 4),
+            const SizedBox(width: 5),
             const Icon(
               Icons.star,
-              size: 12,
+              size: 14,
               color: CbbcColors.orange,
             ),
           ],

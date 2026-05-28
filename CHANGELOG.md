@@ -24,6 +24,31 @@ link."
 
 ---
 
+## 2.0.2 — 2026-05-28
+
+- **Placar dos cantos visível.** Os badges de placar (canto superior
+  esquerdo e inferior direito da quadra) passaram a ser renderizados
+  por último no Stack, ficando acima dos chips quando houver
+  sobreposição. Também ganharam tamanho um pouco maior, fonte mais
+  forte e sombra "botão flutuante" no mesmo padrão dos chips — sem
+  borda azul fininha.
+- **Atletas mais centralizadas em quadra.** As 3 atletas da linha de
+  frente passam a ocupar `x = 0.28 / 0.50 / 0.72` (antes 0.20/0.50/0.80)
+  e as 2 da linha de fundo `x = 0.36 / 0.64` (antes 0.32/0.68). Linha
+  de frente também desceu de `y=0.10` para `y=0.13`, abrindo espaço
+  pros cantos sem invadir o garrafão.
+- **Número da camisa mais pra fora do rosto.** Badge da camisa passou
+  de `-14 %` para `-45 %` do tamanho fora do retrato — quase todo o
+  badge fica do lado de fora, deixando o rosto livre.
+- **Sem flash de várias fotos ao tirar atleta da quadra.** Adicionada
+  `ValueKey(player.id)` em cada `_CourtPlayerSlot`: ao remover uma
+  jogadora, o Flutter casa os widgets remanescentes por identidade
+  (não por posição na lista), então outras fotos não recarregam.
+- **Cache síncrono de retratos.** A foto resolvida fica num mapa
+  síncrono além do mapa de futures; ao montar um chip com URL
+  já carregado em alguma rodada anterior, a foto aparece sem o frame
+  de silhueta intermediário.
+
 ## 2.0.1 — 2026-05-28
 
 - **Quadra com orientação correta.** Rotação agora depende da imagem

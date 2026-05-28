@@ -58,7 +58,7 @@ class PlayerPortraitChip extends StatelessWidget {
                 ),
               ),
               Positioned(
-                right: -jerseyBadgeSize * 0.14,
+                right: -jerseyBadgeSize * 0.45,
                 bottom: chipHeight * 0.12,
                 child: _JerseyBadge(
                   text: player.shirtNumber.toString(),
@@ -98,26 +98,49 @@ class _PortraitFrame extends StatefulWidget {
 class _PortraitFrameState extends State<_PortraitFrame> {
   static final Map<String, Future<_PortraitPhoto?>> _cache =
       <String, Future<_PortraitPhoto?>>{};
+  // Cache síncrono: após o future resolver, guardamos o resultado aqui pra
+  // que mounts subsequentes do mesmo URL pulem o frame de fallback.
+  static final Map<String, _PortraitPhoto?> _resolved =
+      <String, _PortraitPhoto?>{};
 
-  Future<_PortraitPhoto?>? _future;
+  _PortraitPhoto? _photo;
 
   @override
   void initState() {
     super.initState();
-    _future = _futureFor(widget.photoUrl);
+    _resolvePhoto();
   }
 
   @override
   void didUpdateWidget(_PortraitFrame oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.photoUrl != widget.photoUrl) {
-      _future = _futureFor(widget.photoUrl);
+      _resolvePhoto();
     }
   }
 
-  Future<_PortraitPhoto?>? _futureFor(String? url) {
-    if (url == null || url.trim().isEmpty) return null;
-    return _cache.putIfAbsent(url, () => _load(url));
+  void _resolvePhoto() {
+    final String? url = widget.photoUrl;
+    if (url == null || url.trim().isEmpty) {
+      _photo = null;
+      return;
+    }
+    if (_resolved.containsKey(url)) {
+      // Hit síncrono — sem flash de fallback.
+      _photo = _resolved[url];
+      return;
+    }
+    // Cold load: dispara o future e aguarda; mantém _photo null até resolver.
+    _photo = null;
+    final Future<_PortraitPhoto?> future =
+        _cache.putIfAbsent(url, () => _load(url));
+    future.then((_PortraitPhoto? photo) {
+      _resolved[url] = photo;
+      if (!mounted || widget.photoUrl != url) return;
+      setState(() {
+        _photo = photo;
+      });
+    });
   }
 
   static Future<_PortraitPhoto?> _load(String url) async {
@@ -219,33 +242,16 @@ class _PortraitFrameState extends State<_PortraitFrame> {
 
   @override
   Widget build(BuildContext context) {
-    final Future<_PortraitPhoto?>? future = _future;
+    final _PortraitPhoto? photo = _photo;
     return CustomPaint(
       painter: _PortraitFramePainter(),
       child: ClipPath(
         clipper: _PortraitClipper(),
-        child: future == null
+        child: photo == null
             ? const _PortraitFallback()
-            : FutureBuilder<_PortraitPhoto?>(
-                // Key por URL evita o flash da foto da atleta anterior quando
-                // o slot recebe uma jogadora diferente — força o FutureBuilder
-                // a recriar seu State (snapshot.data zera) em vez de reusar
-                // o dado do future antigo durante o frame de transição.
-                key: ValueKey<String?>(widget.photoUrl),
-                future: future,
-                builder: (
-                  BuildContext context,
-                  AsyncSnapshot<_PortraitPhoto?> snapshot,
-                ) {
-                  final _PortraitPhoto? photo = snapshot.data;
-                  if (photo == null) {
-                    return const _PortraitFallback();
-                  }
-                  return CustomPaint(
-                    painter: _PortraitPhotoPainter(photo),
-                    child: const SizedBox.expand(),
-                  );
-                },
+            : CustomPaint(
+                painter: _PortraitPhotoPainter(photo),
+                child: const SizedBox.expand(),
               ),
       ),
     );
