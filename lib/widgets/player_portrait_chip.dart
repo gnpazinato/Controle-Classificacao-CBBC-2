@@ -132,14 +132,22 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     }
     // Cold load: dispara o future e aguarda; mantém _photo null até resolver.
     _photo = null;
-    final Future<_PortraitPhoto?> future =
-        _cache.putIfAbsent(url, () => _load(url));
-    future.then((_PortraitPhoto? photo) {
-      _resolved[url] = photo;
+    _futureFor(url).then((_PortraitPhoto? photo) {
       if (!mounted || widget.photoUrl != url) return;
       setState(() {
         _photo = photo;
       });
+    });
+  }
+
+  /// Compartilhado entre o chip e o pré-carregador. Garante que toda
+  /// resolução popule também [_resolved] pra permitir mounts subsequentes
+  /// sem o frame de silhueta.
+  static Future<_PortraitPhoto?> _futureFor(String url) {
+    return _cache.putIfAbsent(url, () async {
+      final _PortraitPhoto? photo = await _load(url);
+      _resolved[url] = photo;
+      return photo;
     });
   }
 
@@ -512,4 +520,36 @@ Path _portraitPath(Size size) {
     ..quadraticBezierTo(0, h, 0, h - radius)
     ..lineTo(0, notch)
     ..close();
+}
+
+/// Pré-carrega fotos das atletas em background, antes do usuário abrir um
+/// chip em quadra. Reaproveita o mesmo cache estático de
+/// [_PortraitFrameState], então uma vez que uma URL passa por aqui a
+/// próxima montagem do chip aparece com a foto imediatamente.
+abstract class PlayerPhotoPrecache {
+  /// Baixa, decodifica e roda o crop facial de uma única URL. Idempotente.
+  static Future<void> precache(String url) async {
+    if (url.trim().isEmpty) return;
+    await _PortraitFrameState._futureFor(url);
+  }
+
+  /// Pre-carrega URLs em lotes de [concurrency] paralelos (default 6),
+  /// aguardando cada lote terminar antes do próximo. Evita tempestade de
+  /// requests no Drive e pressão de memória ao decodificar 20+ imagens de
+  /// uma vez em tablets modestos.
+  static Future<void> precacheAll(
+    Iterable<String?> urls, {
+    int concurrency = 6,
+  }) async {
+    final List<String> filtered = urls
+        .whereType<String>()
+        .map((String u) => u.trim())
+        .where((String u) => u.isNotEmpty)
+        .toSet()
+        .toList(growable: false);
+    for (int i = 0; i < filtered.length; i += concurrency) {
+      final Iterable<String> batch = filtered.skip(i).take(concurrency);
+      await Future.wait(batch.map(precache));
+    }
+  }
 }

@@ -69,6 +69,14 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     _wasOverA = _state.isTeamAOverLimit;
     _wasOverB = _state.isTeamBOverLimit;
     unawaited(_persist());
+    // Aquece o cache de fotos das duas equipes em lotes de 6 paralelos
+    // (fire-and-forget). A tela já aparece com silhuetas; conforme os
+    // lotes chegam, as fotos populam o cache síncrono. Quando o usuário
+    // coloca uma atleta em quadra, o retrato aparece sem delay.
+    unawaited(PlayerPhotoPrecache.precacheAll(<String?>[
+      for (final Player p in _state.teamA.players) p.photoUrl,
+      for (final Player p in _state.teamB.players) p.photoUrl,
+    ]));
   }
 
   @override
@@ -831,17 +839,17 @@ class _CourtView extends StatelessWidget {
   // de fundo com 2 atletas mais afastados, garantindo folga no meio campo
   // entre as duas equipes.
   static const List<Offset> _teamATargets = <Offset>[
-    Offset(0.28, 0.13),
+    Offset(0.22, 0.13),
     Offset(0.50, 0.13),
-    Offset(0.72, 0.13),
+    Offset(0.78, 0.13),
     Offset(0.36, 0.31),
     Offset(0.64, 0.31),
   ];
 
   static const List<Offset> _teamBTargets = <Offset>[
-    Offset(0.28, 0.87),
+    Offset(0.22, 0.87),
     Offset(0.50, 0.87),
-    Offset(0.72, 0.87),
+    Offset(0.78, 0.87),
     Offset(0.36, 0.69),
     Offset(0.64, 0.69),
   ];

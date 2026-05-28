@@ -24,6 +24,21 @@ link."
 
 ---
 
+## 2.0.3 — 2026-05-28
+
+- **Pré-cache de fotos das atletas em quadra.** Ao abrir a tela de
+  partida, o app já dispara em background o download + crop facial das
+  fotos das duas equipes (todas as atletas, não só as 5 titulares).
+  Carregamento é feito em **lotes de 6 paralelos**, sequenciais — gentil
+  com a rede do tablet e evita rate-limit do Drive em ~24 requests
+  simultâneos. Quando o usuário coloca uma atleta em quadra, a foto
+  aparece sem o "delay de internet" — vem do cache síncrono já populado.
+  Tela continua interativa durante o pré-cache (fire-and-forget).
+- **Mais espaçamento entre as 3 atletas lado a lado.** Linha de frente
+  passou de `x = 0.28 / 0.50 / 0.72` para `x = 0.22 / 0.50 / 0.78`
+  (gap calculado de ~1 px → ~31 px entre badges das chips vizinhas).
+  Linha de fundo (2 atletas) ficou em `0.36 / 0.64` (já confortável).
+
 ## 2.0.2 — 2026-05-28
 
 - **Novas artes de quadra (`quadra1.png` clara, `quadra2.png` escura).**
