@@ -842,16 +842,16 @@ class _CourtView extends StatelessWidget {
     Offset(0.22, 0.13),
     Offset(0.50, 0.13),
     Offset(0.78, 0.13),
-    Offset(0.36, 0.31),
-    Offset(0.64, 0.31),
+    Offset(0.36, 0.37),
+    Offset(0.64, 0.37),
   ];
 
   static const List<Offset> _teamBTargets = <Offset>[
     Offset(0.22, 0.87),
     Offset(0.50, 0.87),
     Offset(0.78, 0.87),
-    Offset(0.36, 0.69),
-    Offset(0.64, 0.69),
+    Offset(0.36, 0.63),
+    Offset(0.64, 0.63),
   ];
 
   @override

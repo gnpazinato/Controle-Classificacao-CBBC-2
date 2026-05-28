@@ -24,6 +24,16 @@ link."
 
 ---
 
+## 2.0.4 — 2026-05-28
+
+- **Linha de fundo das duas equipes mais próxima do centro.** As 2
+  atletas atrás passaram de `y = 0.31` (Equipe A) / `y = 0.69`
+  (Equipe B) para `y = 0.37` / `y = 0.63`. O gap interno de cada equipe
+  cresceu de ~0.08 (apertado) para ~0.14, e o vão central entre as
+  equipes caiu de ~0.28 (~260 px vazios) para ~0.16 (~148 px) — a
+  quadra fica mais preenchida sem aproximar demais as equipes
+  (separação clara, como pedido).
+
 ## 2.0.3 — 2026-05-28
 
 - **Pré-cache de fotos das atletas em quadra.** Ao abrir a tela de
