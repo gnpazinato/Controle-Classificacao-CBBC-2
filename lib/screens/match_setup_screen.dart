@@ -1,0 +1,704 @@
+import 'package:flutter/material.dart';
+
+import '../constants/point_limits.dart';
+import '../models/match_state.dart';
+import '../models/player.dart';
+import '../models/team.dart';
+import '../theme/cbbc_theme.dart';
+import '../widgets/cbbc_logo_header.dart';
+import '../widgets/player_jersey_icon.dart';
+import 'lineup_control_screen.dart';
+
+/// Configuração da partida: escolhe Equipe A, Equipe B, cor da camiseta,
+/// pontuação máxima, bonificações da competição e as datas de referência
+/// (hoje e término da competição).
+class MatchSetupScreen extends StatefulWidget {
+  const MatchSetupScreen({
+    super.key,
+    this.teams,
+    this.competitionName,
+    this.competitionEndDate,
+    this.restored,
+  });
+
+  final List<Team>? teams;
+  final String? competitionName;
+  final DateTime? competitionEndDate;
+  final MatchState? restored;
+
+  @override
+  State<MatchSetupScreen> createState() => _MatchSetupScreenState();
+}
+
+class _MatchSetupScreenState extends State<MatchSetupScreen> {
+  Team? _teamA;
+  Team? _teamB;
+  JerseyColor _teamAColor = JerseyColor.white;
+  JerseyColor _teamBColor = JerseyColor.darkBlue;
+  double _pointLimit = kDefaultPointLimit;
+  BonusRules _bonus = const BonusRules();
+  late DateTime _todayDate;
+  late DateTime _endDate;
+
+  @override
+  void initState() {
+    super.initState();
+    final MatchState? restored = widget.restored;
+    if (restored != null) {
+      _teamA = restored.teamA;
+      _teamB = restored.teamB;
+      _teamAColor = restored.teamAJerseyColor;
+      _teamBColor = restored.teamBJerseyColor;
+      _pointLimit = restored.pointLimit;
+      _bonus = restored.bonusRules;
+      _endDate = restored.referenceDate;
+    } else {
+      _endDate = widget.competitionEndDate ?? _addDays(DateTime.now(), 7);
+    }
+    _todayDate = _stripTime(DateTime.now());
+  }
+
+  static DateTime _stripTime(DateTime d) => DateTime.utc(d.year, d.month, d.day);
+  static DateTime _addDays(DateTime d, int days) =>
+      _stripTime(d.add(Duration(days: days)));
+
+  List<Team> get _availableTeams {
+    final List<Team>? raw = widget.teams;
+    final List<Team> source;
+    if (raw != null) {
+      source = raw;
+    } else {
+      final MatchState? r = widget.restored;
+      if (r != null) {
+        source = <Team>[r.teamA, r.teamB];
+      } else {
+        return const <Team>[];
+      }
+    }
+    return <Team>[...source]
+      ..sort((Team a, Team b) =>
+          a.displayName.toLowerCase().compareTo(b.displayName.toLowerCase()));
+  }
+
+  String? get _competitionName =>
+      widget.competitionName ?? widget.restored?.competitionName;
+
+  bool get _teamsAreSame =>
+      _teamA != null && _teamB != null && _teamA == _teamB;
+
+  bool get _canStart =>
+      _teamA != null && _teamB != null && !_teamsAreSame;
+
+  Future<void> _pickDate({
+    required DateTime initial,
+    required ValueChanged<DateTime> onPicked,
+  }) async {
+    final DateTime now = DateTime.now();
+    final DateTime first = DateTime.utc(now.year - 2);
+    final DateTime last = DateTime.utc(now.year + 5);
+    final DateTime safeInitial =
+        initial.isBefore(first) ? first : (initial.isAfter(last) ? last : initial);
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: safeInitial,
+      firstDate: first,
+      lastDate: last,
+    );
+    if (picked == null) return;
+    onPicked(_stripTime(picked));
+  }
+
+  void _onStartPressed() {
+    if (!_canStart) return;
+    final Team a = _teamA!;
+    final Team b = _teamB!;
+    final MatchState state = MatchState(
+      teamA: a,
+      teamB: b,
+      pointLimit: _pointLimit,
+      competitionName: _competitionName,
+      bonusRules: _bonus,
+      referenceDate: _endDate,
+      teamAJerseyColor: _teamAColor,
+      teamBJerseyColor: _teamBColor,
+    );
+    Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => LineupControlScreen(initialState: state),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Team> teams = _availableTeams;
+    final String? compName = _competitionName;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const CbbcAppBarTitle(text: 'Configurar partida'),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              if (compName != null && compName.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    compName,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w700,
+                          color: CbbcColors.blueDeep,
+                        ),
+                  ),
+                ),
+              _TeamCard(
+                title: 'Equipe A',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _TeamDropdown(
+                      key: const Key('team-a-dropdown'),
+                      label: 'Selecionar Equipe A',
+                      value: _teamA,
+                      teams: teams,
+                      onChanged: (Team? value) =>
+                          setState(() => _teamA = value),
+                    ),
+                    if (_teamA != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      _JerseyColorPicker(
+                        keyName: 'team-a-color',
+                        label: 'Cor da camiseta',
+                        selected: _teamAColor,
+                        onChanged: (JerseyColor c) =>
+                            setState(() => _teamAColor = c),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              _TeamCard(
+                title: 'Equipe B',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    _TeamDropdown(
+                      key: const Key('team-b-dropdown'),
+                      label: 'Selecionar Equipe B',
+                      value: _teamB,
+                      teams: teams,
+                      onChanged: (Team? value) =>
+                          setState(() => _teamB = value),
+                    ),
+                    if (_teamB != null) ...<Widget>[
+                      const SizedBox(height: 12),
+                      _JerseyColorPicker(
+                        keyName: 'team-b-color',
+                        label: 'Cor da camiseta',
+                        selected: _teamBColor,
+                        onChanged: (JerseyColor c) =>
+                            setState(() => _teamBColor = c),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              _PointLimitDropdown(
+                value: _pointLimit,
+                onChanged: (double next) =>
+                    setState(() => _pointLimit = next),
+              ),
+              const SizedBox(height: 20),
+              _BonusSection(
+                rules: _bonus,
+                onChanged: (BonusRules r) => setState(() => _bonus = r),
+              ),
+              const SizedBox(height: 16),
+              _DatesSection(
+                todayDate: _todayDate,
+                endDate: _endDate,
+                onPickToday: () => _pickDate(
+                  initial: _todayDate,
+                  onPicked: (DateTime d) => setState(() => _todayDate = d),
+                ),
+                onPickEnd: () => _pickDate(
+                  initial: _endDate,
+                  onPicked: (DateTime d) => setState(() => _endDate = d),
+                ),
+              ),
+              if (_teamsAreSame)
+                const Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: Text(
+                    'Equipe A e Equipe B devem ser diferentes.',
+                    key: Key('teams-equal-error'),
+                    style: TextStyle(color: CbbcColors.alertRed),
+                  ),
+                ),
+              const SizedBox(height: 24),
+              if (teams.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    'Nenhum clube carregado. Volte e importe um arquivo.',
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: FilledButton.icon(
+            key: const Key('start-match-button'),
+            onPressed: _canStart ? _onStartPressed : null,
+            icon: const Icon(Icons.play_arrow),
+            label: const Text('Iniciar partida'),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamCard extends StatelessWidget {
+  const _TeamCard({required this.title, required this.child});
+
+  final String title;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  width: 6,
+                  height: 18,
+                  decoration: BoxDecoration(
+                    color: CbbcColors.blue,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: CbbcColors.blueDeep,
+                      ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TeamDropdown extends StatelessWidget {
+  const _TeamDropdown({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.teams,
+    required this.onChanged,
+  });
+
+  final String label;
+  final Team? value;
+  final List<Team> teams;
+  final ValueChanged<Team?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<Team>(
+      value: value,
+      isExpanded: true,
+      decoration: InputDecoration(labelText: label),
+      items: teams
+          .map(
+            (Team t) => DropdownMenuItem<Team>(
+              value: t,
+              child: Text(
+                t.displayName,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: teams.isEmpty ? null : onChanged,
+    );
+  }
+}
+
+class _PointLimitDropdown extends StatelessWidget {
+  const _PointLimitDropdown({
+    required this.value,
+    required this.onChanged,
+  });
+
+  final double value;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return DropdownButtonFormField<double>(
+      key: const Key('point-limit-dropdown'),
+      value: value,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Pontuação máxima por equipe',
+      ),
+      items: kAcceptedPointLimits
+          .map(
+            (double v) => DropdownMenuItem<double>(
+              value: v,
+              child: Text(v.toStringAsFixed(1)),
+            ),
+          )
+          .toList(),
+      onChanged: (double? next) {
+        if (next != null) onChanged(next);
+      },
+    );
+  }
+}
+
+class _JerseyColorPicker extends StatelessWidget {
+  const _JerseyColorPicker({
+    required this.keyName,
+    required this.label,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final String keyName;
+  final String label;
+  final JerseyColor selected;
+  final ValueChanged<JerseyColor> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      key: Key(keyName),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 6),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            for (final JerseyColor option in JerseyColor.values)
+              _JerseyOption(
+                color: option,
+                isSelected: option.id == selected.id,
+                onTap: () => onChanged(option),
+              ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _JerseyOption extends StatelessWidget {
+  const _JerseyOption({
+    required this.color,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final JerseyColor color;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: color.label,
+      child: InkWell(
+        key: Key('jersey-option-${color.id}'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isSelected ? CbbcColors.orange : Colors.black12,
+              width: isSelected ? 2.2 : 1,
+            ),
+          ),
+          child: _JerseyPreviewIcon(color: color),
+        ),
+      ),
+    );
+  }
+}
+
+class _JerseyPreviewIcon extends StatelessWidget {
+  const _JerseyPreviewIcon({required this.color});
+
+  final JerseyColor color;
+
+  static final Player _previewPlayer = Player(
+    id: 'preview',
+    clubName: '',
+    shirtNumber: 10,
+    fullName: '',
+    playerClass: null,
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 48,
+      height: 48,
+      child: PlayerJerseyIcon(
+        player: _previewPlayer,
+        isTeamA: true,
+        jerseyColor: color,
+        size: 48,
+      ),
+    );
+  }
+}
+
+class _DatesSection extends StatelessWidget {
+  const _DatesSection({
+    required this.todayDate,
+    required this.endDate,
+    required this.onPickToday,
+    required this.onPickEnd,
+  });
+
+  final DateTime todayDate;
+  final DateTime endDate;
+  final VoidCallback onPickToday;
+  final VoidCallback onPickEnd;
+
+  static String _fmt(DateTime d) {
+    final String day = d.day.toString().padLeft(2, '0');
+    final String month = d.month.toString().padLeft(2, '0');
+    return '$day/$month/${d.year}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: CbbcColors.offWhiteElevated,
+        border: Border.all(color: const Color(0x22000000)),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Datas de referência',
+            style: text.titleSmall?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: CbbcColors.blueDeep,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Conferida com o tablet — se estiver errada, toque para corrigir.',
+            style: text.bodySmall?.copyWith(color: CbbcColors.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          _DateRow(
+            keyName: 'today-date-row',
+            label: 'Data de hoje',
+            value: _fmt(todayDate),
+            onTap: onPickToday,
+          ),
+          const SizedBox(height: 6),
+          _DateRow(
+            keyName: 'end-date-row',
+            label: 'Data de término da competição',
+            value: _fmt(endDate),
+            onTap: onPickEnd,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DateRow extends StatelessWidget {
+  const _DateRow({
+    required this.keyName,
+    required this.label,
+    required this.value,
+    required this.onTap,
+  });
+
+  final String keyName;
+  final String label;
+  final String value;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: Key(keyName),
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(6),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                '$label: $value',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.edit, size: 18, color: CbbcColors.blueDeep),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BonusSection extends StatelessWidget {
+  const _BonusSection({required this.rules, required this.onChanged});
+
+  final BonusRules rules;
+  final ValueChanged<BonusRules> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme text = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+      decoration: BoxDecoration(
+        color: CbbcColors.blueSoft.withValues(alpha: 0.55),
+        border: Border.all(color: CbbcColors.blue.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              const Icon(Icons.star, color: CbbcColors.orange, size: 20),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Bonificações da competição',
+                  style: text.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: CbbcColors.blueDeep,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Quando houver atleta da categoria marcada em quadra, a equipe '
+            'pode chegar até 15.0 pontos sem alerta.',
+            style: text.bodySmall?.copyWith(color: CbbcColors.textSecondary),
+          ),
+          const SizedBox(height: 4),
+          _BonusSwitch(
+            keyName: 'bonus-u16-checkbox',
+            title: 'Sub-16',
+            hint:
+                'Para ter bonificação, o atleta não pode completar 17 anos durante a competição.',
+            value: rules.youthU16,
+            onChanged: (bool v) => onChanged(rules.copyWith(youthU16: v)),
+          ),
+          _BonusSwitch(
+            keyName: 'bonus-u23-checkbox',
+            title: 'Sub-23',
+            hint:
+                'Para ter bonificação, o atleta não pode completar 24 anos durante a competição.',
+            value: rules.youthU23,
+            onChanged: (bool v) => onChanged(rules.copyWith(youthU23: v)),
+          ),
+          _BonusSwitch(
+            keyName: 'bonus-female-checkbox',
+            title: 'Atleta feminina',
+            hint:
+                'Selecione caso a competição seja masculina e tenha bonificação para atletas femininas.',
+            value: rules.female,
+            onChanged: (bool v) => onChanged(rules.copyWith(female: v)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BonusSwitch extends StatelessWidget {
+  const _BonusSwitch({
+    required this.keyName,
+    required this.title,
+    required this.hint,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String keyName;
+  final String title;
+  final String hint;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      key: Key(keyName),
+      value: value,
+      onChanged: onChanged,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontWeight: FontWeight.w700,
+          color: CbbcColors.blueDeep,
+        ),
+      ),
+      subtitle: Text(
+        hint,
+        style: const TextStyle(
+          fontSize: 12,
+          color: CbbcColors.textSecondary,
+          height: 1.25,
+        ),
+      ),
+    );
+  }
+}
