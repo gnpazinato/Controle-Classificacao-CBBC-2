@@ -47,13 +47,10 @@ class PlayerPortraitChip extends StatelessWidget {
               SizedBox(
                 width: chipWidth,
                 height: chipHeight,
-                child: _PortraitFrame(
-                  photoUrl: photoUrl,
-                  initials: _initials(player.fullName),
-                ),
+                child: _PortraitFrame(photoUrl: photoUrl),
               ),
               Positioned(
-                left: -classBadgeSize * 0.18,
+                left: -classBadgeSize * 0.55,
                 top: chipHeight * 0.18,
                 child: _ClassBadge(
                   text: player.playerClass?.toStringAsFixed(1) ?? '—',
@@ -87,30 +84,12 @@ class PlayerPortraitChip extends StatelessWidget {
     final String bonus = isBonusEligible ? ', com bonificação' : '';
     return '${player.displayName}, camisa ${player.shirtNumber}, classe $cls$bonus';
   }
-
-  static String _initials(String name) {
-    final List<String> parts = name
-        .trim()
-        .split(RegExp(r'\s+'))
-        .where((String part) => part.isNotEmpty)
-        .toList(growable: false);
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return _firstLetter(parts.first).toUpperCase();
-    return '${_firstLetter(parts.first)}${_firstLetter(parts.last)}'
-        .toUpperCase();
-  }
-
-  static String _firstLetter(String value) {
-    if (value.isEmpty) return '?';
-    return String.fromCharCode(value.runes.first);
-  }
 }
 
 class _PortraitFrame extends StatefulWidget {
-  const _PortraitFrame({required this.photoUrl, required this.initials});
+  const _PortraitFrame({required this.photoUrl});
 
   final String? photoUrl;
-  final String initials;
 
   @override
   State<_PortraitFrame> createState() => _PortraitFrameState();
@@ -243,38 +222,38 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     final Future<_PortraitPhoto?>? future = _future;
     return CustomPaint(
       painter: _PortraitFramePainter(),
-      child: Padding(
-        padding: const EdgeInsets.all(1.0),
-        child: ClipPath(
-          clipper: _PortraitClipper(),
-          child: future == null
-              ? _PortraitFallback(initials: widget.initials)
-              : FutureBuilder<_PortraitPhoto?>(
-                  future: future,
-                  builder: (
-                    BuildContext context,
-                    AsyncSnapshot<_PortraitPhoto?> snapshot,
-                  ) {
-                    final _PortraitPhoto? photo = snapshot.data;
-                    if (photo == null) {
-                      return _PortraitFallback(initials: widget.initials);
-                    }
-                    return CustomPaint(
-                      painter: _PortraitPhotoPainter(photo),
-                      child: const SizedBox.expand(),
-                    );
-                  },
-                ),
-        ),
+      child: ClipPath(
+        clipper: _PortraitClipper(),
+        child: future == null
+            ? const _PortraitFallback()
+            : FutureBuilder<_PortraitPhoto?>(
+                // Key por URL evita o flash da foto da atleta anterior quando
+                // o slot recebe uma jogadora diferente — força o FutureBuilder
+                // a recriar seu State (snapshot.data zera) em vez de reusar
+                // o dado do future antigo durante o frame de transição.
+                key: ValueKey<String?>(widget.photoUrl),
+                future: future,
+                builder: (
+                  BuildContext context,
+                  AsyncSnapshot<_PortraitPhoto?> snapshot,
+                ) {
+                  final _PortraitPhoto? photo = snapshot.data;
+                  if (photo == null) {
+                    return const _PortraitFallback();
+                  }
+                  return CustomPaint(
+                    painter: _PortraitPhotoPainter(photo),
+                    child: const SizedBox.expand(),
+                  );
+                },
+              ),
       ),
     );
   }
 }
 
 class _PortraitFallback extends StatelessWidget {
-  const _PortraitFallback({required this.initials});
-
-  final String initials;
+  const _PortraitFallback();
 
   @override
   Widget build(BuildContext context) {
@@ -287,12 +266,15 @@ class _PortraitFallback extends StatelessWidget {
         ),
       ),
       child: Center(
-        child: Text(
-          initials,
-          style: const TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-            height: 1,
+        child: FractionallySizedBox(
+          heightFactor: 0.82,
+          widthFactor: 0.82,
+          child: FittedBox(
+            fit: BoxFit.contain,
+            child: Icon(
+              Icons.person_rounded,
+              color: Colors.white.withValues(alpha: 0.92),
+            ),
           ),
         ),
       ),
@@ -487,25 +469,13 @@ class _PortraitFramePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final Path path = _portraitPath(size);
-
+    // Sem moldura, sem fundo branco — só sombra projetada para o chip
+    // parecer flutuar sobre a quadra.
     final Paint shadowPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.28)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5)
+      ..color = Colors.black.withValues(alpha: 0.45)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
       ..style = PaintingStyle.fill;
-    canvas.drawPath(path.shift(const Offset(0, 2)), shadowPaint);
-
-    final Paint fill = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.fill
-      ..isAntiAlias = true;
-    canvas.drawPath(path, fill);
-
-    final Paint stroke = Paint()
-      ..color = CbbcColors.slate200
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.0
-      ..isAntiAlias = true;
-    canvas.drawPath(path, stroke);
+    canvas.drawPath(path.shift(const Offset(0, 3)), shadowPaint);
   }
 
   @override

@@ -24,6 +24,37 @@ link."
 
 ---
 
+## 2.0.1 — 2026-05-28
+
+- **Quadra com orientação correta.** Rotação agora depende da imagem
+  escolhida: `wbk-court2.png` (clara, já portrait) é renderizada sem
+  rotação; `court.png` (antiga, landscape) ganha o `quarterTurns: 1`
+  histórico. Corrige o efeito de "faixa estreita" que aparecia na 2.0.0.
+- **Toggle de estilo da quadra (clara/escura) em tempo real.** Duas
+  bolinhas miniatura abaixo da quadra alternam o piso instantaneamente
+  (assets pré-carregados via `precacheImage`, sem flicker).
+- **Quadra maior + formação 3+2.** Em tablet, o flex da quadra subiu de
+  `3:4:3` para `3:5:3`. Os 5 atletas de cada equipe passam a ocupar uma
+  linha de 3 perto do garrafão + uma linha de 2 mais atrás (antes era
+  2+2+1, que aglomerava as equipes no meio campo).
+- **Chips sem moldura.** Removida a borda branca fina e o fundo branco
+  ao redor dos retratos — restou só a sombra projetada para o chip
+  parecer flutuar. Espaçamento entre chips foi recalibrado.
+- **Badge de classe sai do rosto.** A "tab" da classe funcional passa a
+  ficar a ~60 % fora do retrato, deixando o rosto totalmente livre.
+- **Silhueta em vez de iniciais.** Enquanto a foto não carrega (ou se
+  o link estiver indisponível), o chip mostra um ícone de silhueta
+  humana sobre o gradiente azul cobalto, no lugar das iniciais.
+- **Fix: foto fantasma ao trocar atleta.** O retrato anterior já não
+  aparece por um instante quando o slot recebe uma jogadora diferente;
+  agora o `FutureBuilder` é recriado por URL.
+- **Placar espelho na quadra.** Pequenos badges nos cantos (Equipe A em
+  cima à esquerda, Equipe B embaixo à direita) repetem
+  `total / limite` da partida — feedback visual da pontuação para o
+  público durante a transmissão. Quando estoura o limite o badge fica
+  vermelho com glow, sem texto extra de "Limite excedido" (sem espaço
+  na quadra).
+
 ## 2.0.0 — 2026-05-28
 
 - **Design moderno de transmissão (Broadcast Style).** Renovação visual
