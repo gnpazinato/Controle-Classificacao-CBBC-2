@@ -1198,6 +1198,7 @@ class _CourtHint extends StatelessWidget {
 
 class _CourtPlayerSlot extends StatelessWidget {
   const _CourtPlayerSlot({
+    super.key,
     required this.player,
     required this.jerseyColor,
     required this.isBonusEligible,
