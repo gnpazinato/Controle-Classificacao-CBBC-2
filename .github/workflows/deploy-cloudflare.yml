@@ -40,16 +40,6 @@ jobs:
       - name: Build web (release)
         run: flutter build web --release --base-href "/"
 
-      # Garante que o projeto Pages exista antes do 1º deploy. Se já existir,
-      # o comando falha com erro inofensivo, ignorado por continue-on-error.
-      - name: Ensure Pages project exists
-        uses: cloudflare/wrangler-action@v3
-        continue-on-error: true
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: pages project create cbbc-quadra-live --production-branch=main
-
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
