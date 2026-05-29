@@ -24,6 +24,24 @@ link."
 
 ---
 
+## 2.2.1 — 2026-05-29
+
+- **Correção do crop em fotos tiradas "de longe".** Algumas atletas
+  (sobretudo as fotos de corpo inteiro/sentadas em cadeira, com a
+  cabeça pequena e bastante parede em volta) apareciam com o rosto
+  fora do enquadramento — o recorte caía num canto vazio da foto ou
+  pegava a imagem inteira. Causa: em fundos cinza com vinheta/sombra
+  nos cantos, os pixels escuros das bordas eram confundidos com a
+  atleta, jogando o centro e o topo detectados pra fora dela.
+  - A detecção do sujeito agora **ignora uma margem horizontal** (a
+    atleta nunca encosta na borda lateral do retrato) e exige uma
+    **sequência contígua** de pixels — ruído espalhado nos cantos não
+    forma sequência e é descartado.
+  - Com a detecção robusta, o mesmo enquadramento padronizado
+    (rosto + ombros) passa a valer pros quatro formatos de foto: só
+    rosto, close-up (torso + rosto), enquadramento médio e foto de
+    longe. As fotos que já cortavam bem **não mudaram**.
+
 ## 2.2.0 — 2026-05-29
 
 - **Crop inteligente com detecção de close-up.** Algoritmo de

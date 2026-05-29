@@ -253,28 +253,64 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     }
 
     final int step = math.max(1, math.min(width, height) ~/ 360);
-    final int minRunPerRow = math.max(3, (width * 0.04) ~/ step);
 
-    // 1. Topo do sujeito: primeira linha com uma sequência minimamente
-    //    sólida de pixels do sujeito (filtra ruído isolado).
-    int subjectTop = -1;
-    int topRowLeft = 0;
-    int topRowRight = width;
-    for (int y = 0; y < height; y += step) {
-      int run = 0;
-      int firstX = -1;
-      int lastX = -1;
-      for (int x = 0; x < width; x += step) {
-        if (isSubject(x, y)) {
-          if (firstX == -1) firstX = x;
-          lastX = x;
-          run++;
+    // O retrato sempre tem a atleta centralizada. Fundos com vinheta,
+    // sombra nos cantos ou moldura disparam o detector de sujeito nas
+    // *bordas* e jogavam o recorte pra fora do rosto (bug das fotos
+    // tiradas "de longe"). Para blindar contra isso, toda a busca:
+    //   • ignora uma margem horizontal (xMargin) — a atleta nunca encosta
+    //     na borda lateral, então pixel de sujeito ali é ruído de fundo;
+    //   • exige uma *sequência contígua* mínima de pixels do sujeito —
+    //     ruído espalhado nos cantos não forma run e é descartado.
+    final int xMargin = (width * 0.07).round();
+    final int xStart = xMargin;
+    final int xEnd = width - xMargin;
+    // Run mínimo pra valer como sujeito (~5 % da largura). Buracos
+    // pequenos (olhos, óculos, mechas) até gapTol não quebram o run.
+    final int minRun = math.max(2 * step, (width * 0.05).round());
+    final int gapTol = math.max(step, (width * 0.04).round());
+
+    // Maior sequência contígua de sujeito na linha [y], dentro da margem.
+    // Devolve [start, end] em px, ou null se não atingir minRun.
+    List<int>? longestSubjectRun(int y) {
+      int bestStart = -1, bestEnd = -1, bestLen = -1;
+      int curStart = -1, curEnd = -1, gap = 0;
+      void closeRun() {
+        if (curStart >= 0) {
+          final int len = curEnd - curStart;
+          if (len > bestLen) {
+            bestLen = len;
+            bestStart = curStart;
+            bestEnd = curEnd;
+          }
         }
       }
-      if (run >= minRunPerRow) {
+
+      for (int x = xStart; x < xEnd; x += step) {
+        if (isSubject(x, y)) {
+          if (curStart < 0) curStart = x;
+          curEnd = x;
+          gap = 0;
+        } else if (curStart >= 0) {
+          gap += step;
+          if (gap > gapTol) {
+            closeRun();
+            curStart = -1;
+            curEnd = -1;
+            gap = 0;
+          }
+        }
+      }
+      closeRun();
+      if (bestLen < minRun) return null;
+      return <int>[bestStart, bestEnd];
+    }
+
+    // 1. Topo do sujeito: primeira linha com um run contíguo e central.
+    int subjectTop = -1;
+    for (int y = 0; y < height; y += step) {
+      if (longestSubjectRun(y) != null) {
         subjectTop = y;
-        topRowLeft = firstX;
-        topRowRight = lastX;
         break;
       }
     }
@@ -283,45 +319,34 @@ class _PortraitFrameState extends State<_PortraitFrame> {
       return _centerCrop(width, height);
     }
 
-    // 2. Largura da cabeça: usa a mediana da largura "do sujeito" nas
-    //    linhas dentro dos primeiros 18 % abaixo do topo. Isso evita que
-    //    ombros muito largos dominem a medida.
+    // 2. Largura/centro da cabeça: mediana dos runs contíguos nas linhas
+    //    dentro dos primeiros 18 % abaixo do topo. Como a cabeça domina
+    //    essa faixa, a mediana fica imune a alguns ombros largos no fim.
     final int headBandBottom = math.min(
       height,
       subjectTop + (height * 0.18).round(),
     );
     final List<int> widths = <int>[];
-    final List<int> leftEdges = <int>[];
-    final List<int> rightEdges = <int>[];
+    final List<int> centers = <int>[];
     for (int y = subjectTop; y < headBandBottom; y += step) {
-      int firstX = -1;
-      int lastX = -1;
-      for (int x = 0; x < width; x += step) {
-        if (isSubject(x, y)) {
-          if (firstX == -1) firstX = x;
-          lastX = x;
-        }
-      }
-      if (firstX != -1 && lastX - firstX >= step) {
-        widths.add(lastX - firstX);
-        leftEdges.add(firstX);
-        rightEdges.add(lastX);
+      final List<int>? run = longestSubjectRun(y);
+      if (run != null) {
+        widths.add(run[1] - run[0]);
+        centers.add(((run[0] + run[1]) / 2).round());
       }
     }
 
     double headWidth;
     double headCenterX;
     if (widths.isEmpty) {
-      headWidth = (topRowRight - topRowLeft).toDouble();
-      headCenterX = (topRowLeft + topRowRight) / 2;
+      final List<int>? top = longestSubjectRun(subjectTop);
+      headWidth = top == null ? width * 0.30 : (top[1] - top[0]).toDouble();
+      headCenterX = top == null ? width / 2 : (top[0] + top[1]) / 2;
     } else {
       widths.sort();
-      leftEdges.sort();
-      rightEdges.sort();
+      centers.sort();
       headWidth = widths[widths.length ~/ 2].toDouble();
-      final int medianLeft = leftEdges[leftEdges.length ~/ 2];
-      final int medianRight = rightEdges[rightEdges.length ~/ 2];
-      headCenterX = (medianLeft + medianRight) / 2;
+      headCenterX = centers[centers.length ~/ 2].toDouble();
     }
     if (headWidth < 1) headWidth = width * 0.30;
 

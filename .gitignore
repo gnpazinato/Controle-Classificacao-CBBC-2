@@ -50,6 +50,10 @@ coverage/
 # cada `flutter test`, não comitar.
 test/_artifacts/
 
+# Fotos reais baixadas do Drive p/ aferição do crop (test/_real_crop_probe.dart
+# e test/_game_simulation.dart). Pesadas e privadas — não comitar.
+test/_photos/
+
 # Symbols
 app.*.symbols
 app.*.map.json
