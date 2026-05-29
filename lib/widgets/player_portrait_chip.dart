@@ -1,5 +1,4 @@
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -35,7 +34,9 @@ class PlayerPortraitChip extends StatelessWidget {
     final double chipWidth = math.min(maxWidth, chipHeight * 0.84);
 
     // Badges são proporcionais ao chip pra acompanhar telas variadas.
-    final double classBadgeSize = chipHeight * 0.30;
+    // Class badge: pill um pouco menor (0.26) com overhang reduzido pra
+    // não invadir o chip vizinho na linha de 3 atletas da frente.
+    final double classBadgeSize = chipHeight * 0.26;
     final double jerseyBadgeSize = chipHeight * 0.28;
     final String? photoUrl = player.photoUrl;
 
@@ -48,10 +49,11 @@ class PlayerPortraitChip extends StatelessWidget {
           child: _PortraitFrame(photoUrl: photoUrl),
         ),
         Positioned(
-          // Badge da classe levemente pra cima e mais pra esquerda — não
-          // toca no rosto e abre espaço pro chip ao lado.
-          left: -classBadgeSize * 0.70,
-          top: chipHeight * 0.04,
+          // Overhang lateral comedido: o badge encosta na borda esquerda
+          // do chip e projeta só ~metade da sua altura pra fora, deixando
+          // espaço pro chip ao lado na linha de 3 atletas.
+          left: -classBadgeSize * 0.50,
+          top: chipHeight * 0.05,
           child: _ClassBadge(
             text: player.playerClass?.toStringAsFixed(1) ?? '—',
             size: classBadgeSize,
@@ -109,6 +111,13 @@ class PlayerPortraitChip extends StatelessWidget {
     final String bonus = isBonusEligible ? ', com bonificação' : '';
     return '${player.displayName}, camisa ${player.shirtNumber}, classe $cls$bonus';
   }
+
+  /// Exposto apenas para testes visuais de regressão do crop. Recebe uma
+  /// imagem já decodificada e devolve o retângulo de origem que seria
+  /// desenhado pelo chip.
+  @visibleForTesting
+  static Future<Rect> debugComputeCrop(ui.Image image) =>
+      _PortraitFrameState._computeSourceRect(image);
 }
 
 class _PortraitFrame extends StatefulWidget {
@@ -196,18 +205,27 @@ class _PortraitFrameState extends State<_PortraitFrame> {
   /// Determina o recorte da foto de forma **consistente** entre atletas:
   /// sempre rosto + pescoço + ombros + um pouco da camiseta.
   ///
-  /// Estratégia:
-  /// 1. Faz uma varredura pra encontrar pixels do sujeito (não-fundo).
-  /// 2. Usa o topo do sujeito (onde fica o topo da cabeça) como âncora.
-  /// 3. Estima a largura da cabeça medindo a faixa de pixels do sujeito
-  ///    na região superior (até 25 % abaixo do topo).
-  /// 4. Escala a altura do recorte por **~3 × largura da cabeça** — isso
-  ///    corresponde, na prática, a "rosto + pescoço + ombros + barra do
-  ///    decote". Como a largura da cabeça é uma medida proporcional ao
-  ///    tamanho real do rosto no enquadramento original, fotos com zoom
-  ///    diferente terminam recortadas no mesmo "tamanho aparente".
-  /// 5. Garante uma altura mínima/máxima absoluta pra evitar crops
-  ///    minúsculos quando a detecção falhar.
+  /// Estratégia em 3 passos:
+  ///
+  /// 1. **Cor de fundo adaptativa.** Em vez de assumir fundo branco
+  ///    (saturação < 22, como a versão anterior), amostra os pixels das
+  ///    bordas superior/laterais e calcula a cor mediana do fundo.
+  ///    Funciona com fundos coloridos, escuros ou texturizados.
+  ///
+  /// 2. **Detecção do sujeito.** Pixel é "sujeito" se a soma das
+  ///    distâncias absolutas RGB até a cor de fundo passar do limiar
+  ///    (~70 ≈ 24/canal). Isso evita falsos positivos com fundo escuro
+  ///    e camiseta escura ao mesmo tempo.
+  ///
+  /// 3. **Decisão close-up vs crop padronizado.** Estima a largura da
+  ///    cabeça pela mediana das larguras de sujeito na faixa superior.
+  ///    A altura alvo "rosto + ombros" é ~2.7 × essa largura. Se essa
+  ///    altura ideal *não cabe* na foto (ou seja, o rosto já ocupa
+  ///    quase toda a altura), entra no branch de close-up: a foto não
+  ///    é cortada verticalmente, apenas recentralizada no rosto. Caso
+  ///    contrário, faz o crop padronizado com a altura derivada da
+  ///    cabeça — o que dá tamanho aparente igual entre fotos com zoom
+  ///    diferente.
   static Future<Rect> _computeSourceRect(ui.Image image) async {
     final int width = image.width;
     final int height = image.height;
@@ -222,16 +240,16 @@ class _PortraitFrameState extends State<_PortraitFrame> {
       raw.lengthInBytes,
     );
 
+    final _BgSample bg = _sampleBackground(pixels, width, height);
+
     bool isSubject(int x, int y) {
       final int idx = (y * width + x) * 4;
       final int r = pixels[idx];
       final int g = pixels[idx + 1];
       final int b = pixels[idx + 2];
-      final int maxChannel = math.max(r, math.max(g, b));
-      final int minChannel = math.min(r, math.min(g, b));
-      final int saturation = maxChannel - minChannel;
-      // Fundo: branco/claro com pouca saturação. Tudo o resto é sujeito.
-      return saturation > 22 || maxChannel < 205;
+      final int distance =
+          (r - bg.r).abs() + (g - bg.g).abs() + (b - bg.b).abs();
+      return distance > bg.threshold;
     }
 
     final int step = math.max(1, math.min(width, height) ~/ 360);
@@ -266,7 +284,7 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     }
 
     // 2. Largura da cabeça: usa a mediana da largura "do sujeito" nas
-    //    linhas dentro dos primeiros 25 % abaixo do topo. Isso evita que
+    //    linhas dentro dos primeiros 18 % abaixo do topo. Isso evita que
     //    ombros muito largos dominem a medida.
     final int headBandBottom = math.min(
       height,
@@ -307,34 +325,115 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     }
     if (headWidth < 1) headWidth = width * 0.30;
 
-    // 3. Recorte: altura ≈ 3 × largura da cabeça, gentil margem acima.
-    //    O fator 3.0 vem da regra de ouro do enquadramento "rosto + ombros
-    //    + um pouco da camiseta": numa foto bem enquadrada, esse trecho
-    //    mede cerca de 3× a largura da cabeça.
-    final double topMargin = headWidth * 0.20;
-    double cropHeight = headWidth * 3.0;
-    // Mínimo: pelo menos 38 % da altura da foto, pra evitar crops muito
-    // apertados em fotos onde a cabeça acabou pequena. Máximo: 65 % da
-    // altura, pra não pegar do quadril pra baixo.
-    cropHeight = cropHeight.clamp(height * 0.38, height * 0.65).toDouble();
-    final double cropWidth = (cropHeight * 0.82).clamp(1.0, width.toDouble());
+    // 3. Decisão close-up vs crop padronizado.
+    //    Constantes alvo: rosto + ombros + pouco da camiseta ≈ 2.7 ×
+    //    largura da cabeça, com 22 % de margem acima do topo.
+    const double targetCropFactor = 2.7;
+    const double topMarginFactor = 0.22;
+    final double idealCropHeight = headWidth * targetCropFactor;
+    final double idealTopMargin = headWidth * topMarginFactor;
 
-    double cropTop = subjectTop - topMargin;
-    double cropLeft = headCenterX - cropWidth / 2;
-    cropTop =
-        cropTop.clamp(0.0, math.max(0.0, height - cropHeight)).toDouble();
-    cropLeft =
-        cropLeft.clamp(0.0, math.max(0.0, width - cropWidth)).toDouble();
+    // Se a altura ideal (com margem) já ultrapassa 92 % da foto, a foto
+    // **já veio em close** — não tem espaço pra um crop padronizado.
+    // Nesse caso usa a foto inteira só recentralizada no rosto.
+    final bool isCloseUp =
+        (idealCropHeight + idealTopMargin) >= height * 0.92;
+
+    final double cropHeight;
+    final double cropTop;
+    if (isCloseUp) {
+      cropHeight = height.toDouble();
+      cropTop = 0.0;
+    } else {
+      // Crop padronizado. Aspect ratio retrato 0.82.
+      // Limites de segurança: nunca menos que 42 % nem mais que 80 % da
+      // altura — protege contra detecções esquisitas.
+      cropHeight =
+          idealCropHeight.clamp(height * 0.42, height * 0.80).toDouble();
+      cropTop = (subjectTop - idealTopMargin)
+          .clamp(0.0, math.max(0.0, height - cropHeight))
+          .toDouble();
+    }
+
+    final double cropWidth =
+        math.min(width.toDouble(), cropHeight * 0.82);
+    final double cropLeft = (headCenterX - cropWidth / 2)
+        .clamp(0.0, math.max(0.0, width - cropWidth))
+        .toDouble();
 
     return Rect.fromLTWH(cropLeft, cropTop, cropWidth, cropHeight);
   }
 
+  /// Amostra os pixels das bordas superior/laterais (faixa superior, evita
+  /// pegar a camiseta no rodapé) e devolve a cor mediana do fundo + um
+  /// limiar de tolerância.
+  static _BgSample _sampleBackground(
+    Uint8List pixels,
+    int width,
+    int height,
+  ) {
+    final List<int> rs = <int>[];
+    final List<int> gs = <int>[];
+    final List<int> bs = <int>[];
+    final int marginX = math.max(1, (width * 0.05).round());
+    final int marginY = math.max(1, (height * 0.05).round());
+    final int sideBottom = height ~/ 3;
+    final int stepX = math.max(1, width ~/ 40);
+    final int stepY = math.max(1, marginY ~/ 4);
+    final int sideStepY = math.max(1, sideBottom ~/ 20);
+    final int sideStepX = math.max(1, marginX ~/ 4);
+
+    void sample(int x, int y) {
+      if (x < 0 || x >= width || y < 0 || y >= height) return;
+      final int idx = (y * width + x) * 4;
+      rs.add(pixels[idx]);
+      gs.add(pixels[idx + 1]);
+      bs.add(pixels[idx + 2]);
+    }
+
+    // Faixa do topo: linha cheia, várias linhas.
+    for (int y = 0; y < marginY; y += stepY) {
+      for (int x = 0; x < width; x += stepX) {
+        sample(x, y);
+      }
+    }
+    // Faixas laterais — só no terço superior, pra não confundir com camiseta.
+    for (int y = 0; y < sideBottom; y += sideStepY) {
+      for (int x = 0; x < marginX; x += sideStepX) {
+        sample(x, y);
+        sample(width - 1 - x, y);
+      }
+    }
+
+    if (rs.isEmpty) {
+      return const _BgSample(r: 255, g: 255, b: 255, threshold: 70);
+    }
+    rs.sort();
+    gs.sort();
+    bs.sort();
+    final int mid = rs.length ~/ 2;
+    return _BgSample(
+      r: rs[mid],
+      g: gs[mid],
+      b: bs[mid],
+      // Limiar L1 (soma absoluta RGB) ≈ 24/canal. Suficiente pra separar
+      // pele/cabelo/roupa de fundos uniformes; não tão alto que dilua a
+      // distinção em fundos escuros.
+      threshold: 70,
+    );
+  }
+
   static Rect _centerCrop(int width, int height) {
-    final double cropHeight = (height * 0.50).clamp(1.0, height).toDouble();
+    // Fallback quando a detecção falha: 65 % da altura começando a 20 %
+    // do topo dentro da margem vertical disponível. Antes pegava só a
+    // metade superior, o que cortava nos olhos em fotos pequenas.
+    final double cropHeight =
+        (height * 0.65).clamp(1.0, height.toDouble()).toDouble();
     final double cropWidth =
-        (cropHeight * 0.82).clamp(1.0, width).toDouble();
+        math.min(width.toDouble(), cropHeight * 0.82);
     final double left = math.max(0.0, (width - cropWidth) / 2);
-    return Rect.fromLTWH(left, 0, cropWidth, cropHeight);
+    final double top = math.max(0.0, (height - cropHeight) * 0.20);
+    return Rect.fromLTWH(left, top, cropWidth, cropHeight);
   }
 
   @override
@@ -398,19 +497,24 @@ class _ClassBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Mesma cor da camiseta + número na cor de leitura da camiseta. Sem
-    // borda; só uma sombra suave pra destacar sobre a foto.
+    // Pill arredondado com borda branca fina pra destacar sobre a foto
+    // sem precisar de uma sombra pesada. Fonte um pouco mais leve (w800)
+    // pra ficar elegante em telas pequenas.
     return Container(
       width: size * 1.15,
       height: size,
       decoration: BoxDecoration(
         color: jerseyColor.fill,
-        borderRadius: BorderRadius.circular(size * 0.22),
+        borderRadius: BorderRadius.circular(size * 0.34),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.88),
+          width: 1.1,
+        ),
         boxShadow: <BoxShadow>[
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.28),
-            blurRadius: 5,
-            offset: const Offset(0, 2),
+            color: Colors.black.withValues(alpha: 0.22),
+            blurRadius: 4,
+            offset: const Offset(0, 1.5),
           ),
         ],
       ),
@@ -418,14 +522,15 @@ class _ClassBadge extends StatelessWidget {
       child: FittedBox(
         fit: BoxFit.scaleDown,
         child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: size * 0.12),
+          padding: EdgeInsets.symmetric(horizontal: size * 0.14),
           child: Text(
             text,
             style: TextStyle(
               color: jerseyColor.numberColor,
-              fontSize: size * 0.52,
-              fontWeight: FontWeight.w900,
+              fontSize: size * 0.54,
+              fontWeight: FontWeight.w800,
               height: 1,
+              letterSpacing: -0.2,
               fontFeatures: const <ui.FontFeature>[
                 ui.FontFeature.tabularFigures(),
               ],
@@ -532,6 +637,20 @@ class _PortraitPhoto {
 
   final ui.Image image;
   final Rect sourceRect;
+}
+
+class _BgSample {
+  const _BgSample({
+    required this.r,
+    required this.g,
+    required this.b,
+    required this.threshold,
+  });
+
+  final int r;
+  final int g;
+  final int b;
+  final int threshold;
 }
 
 class _PortraitPhotoPainter extends CustomPainter {

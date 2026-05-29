@@ -24,6 +24,34 @@ link."
 
 ---
 
+## 2.2.0 — 2026-05-29
+
+- **Crop inteligente com detecção de close-up.** Algoritmo de
+  enquadramento reescrito em duas frentes:
+  1. **Cor de fundo adaptativa.** Antes assumia fundo branco
+     (saturação < 22). Agora amostra os pixels das bordas
+     superior/laterais e calcula a cor mediana do fundo. Funciona com
+     fundos coloridos (verde, azul, cinza), escuros ou texturizados —
+     resolve o "crop ruim" em fotos onde o background não era branco.
+  2. **Branch close-up.** Antes de cortar, mede se a altura ideal do
+     enquadramento (rosto + ombros) já não cabe na foto. Se a foto
+     **já veio em close**, pula o crop vertical e só recentraliza no
+     rosto — evita cortar nos olhos em fotos tipo 3×4 que já vêm bem
+     enquadradas.
+- **Badge de classe mais elegante.** Pill ~13 % menor, borda branca
+  fina (1.1 px) pra destacar sobre a foto, raio de canto maior
+  (0.34 × tamanho), fonte w800 com letter-spacing levemente negativo
+  e sombra mais sutil. O overhang lateral caiu de 0.70 → 0.50, então
+  o badge não invade mais o chip vizinho na linha de 3 atletas da
+  frente.
+- **Teste visual de regressão do crop.** Novo `portrait_crop_visual_
+  test.dart` gera 6 "fotos" sintéticas (close-up, rosto distante,
+  fundo branco/verde/cinza, cabelo encostado no topo) e produz uma
+  grade em `test/_artifacts/portrait_crop_cases.png` mostrando o
+  retângulo escolhido sobre a original e o resultado no chip. Permite
+  detectar regressões visuais a olho nu antes de qualquer mudança no
+  algoritmo.
+
 ## 2.1.0 — 2026-05-28
 
 - **Quadra interativa: toque na foto da jogadora pra remover.** Antes só
