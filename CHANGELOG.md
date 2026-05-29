@@ -24,6 +24,25 @@ link."
 
 ---
 
+## 2.3.0 — 2026-05-29
+
+- **Transmissão pública da quadra ao vivo (novo recurso).** Um botão
+  discreto na barra superior da tela de jogo (ícone de transmissão) inicia,
+  com um toque, uma transmissão pública só da quadra — chips das atletas e
+  placar nos cantos, sem barras nem botões. Abre uma janelinha (pop-up) com
+  **QR code** e o **link copiável**; o mesmo botão reabre a janelinha quando
+  fechada. O link tem a forma `…/v/<codigo>` (código de 5 caracteres).
+  - **Funciona só online**, igual às fotos do Google Drive: sem internet, o
+    app segue 100% normal e o botão apenas avisa que precisa de conexão.
+  - A página pública atualiza em tempo quase real (~1s) e suporta vários
+    espectadores ao mesmo tempo (ideal para espelhar no OBS → YouTube).
+  - **Encerrar** na janelinha derruba a transmissão; ela também expira
+    sozinha após 1h sem atividade.
+  - Backend serverless no Cloudflare Pages + D1 (free tier). O widget da
+    quadra foi extraído para `lib/widgets/court_view.dart` e é reusado
+    idêntico na tela de jogo e no viewer público — sem mudança visual na
+    partida.
+
 ## 2.2.1 — 2026-05-29
 
 - **Correção do crop em fotos tiradas "de longe".** Algumas atletas

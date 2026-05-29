@@ -4,12 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'screens/load_spreadsheet_screen.dart';
+import 'screens/public_viewer_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/wakelock_controller.dart';
 import 'theme/cbbc_theme.dart';
+import 'utils/url_strategy.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // URLs limpas na web (/v/abc em vez de /#/v/abc). No-op no Android.
+  configureUrlStrategy();
   // Fullscreen "modo vídeo": esconde barras de sistema (status e
   // navegação). Swipe da borda traz as barras de volta temporariamente
   // e elas voltam a sumir após alguns segundos.
@@ -43,7 +47,21 @@ class CbbcApp extends StatelessWidget {
       title: 'Controle de Classificação CBBC',
       debugShowCheckedModeBanner: false,
       theme: buildCbbcTheme(),
+      // Fluxo normal inalterado: `/` → home. Na web, `/v/<codigo>` abre o
+      // viewer público da transmissão, isolado do resto do app. Para
+      // qualquer outra rota, devolve `null` e o `home` assume.
       home: home,
+      onGenerateRoute: (RouteSettings settings) {
+        final Uri uri = Uri.parse(settings.name ?? '/');
+        if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'v') {
+          final String code = uri.pathSegments[1];
+          return MaterialPageRoute<void>(
+            settings: settings,
+            builder: (BuildContext _) => PublicViewerScreen(code: code),
+          );
+        }
+        return null;
+      },
     );
   }
 }

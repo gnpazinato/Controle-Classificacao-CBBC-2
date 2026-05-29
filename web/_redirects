@@ -1,0 +1,4 @@
+# SPA fallback: qualquer rota que não seja arquivo estático nem Function
+# (ex.: /v/7k3xq) cai no index.html, e o Flutter resolve a rota internamente.
+# As rotas /api/* são servidas pelas Functions antes de chegar aqui.
+/*    /index.html   200

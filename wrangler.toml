@@ -1,0 +1,17 @@
+# Configuração do Cloudflare Pages (projeto que hospeda o viewer + Functions).
+#
+# O binding D1 abaixo é lido no deploy — não precisa configurar nada no
+# dashboard. Só falta preencher o database_id depois de criar o banco:
+#
+#   npx wrangler d1 create cbbc-quadra-live
+#
+# O comando devolve o database_id; cole-o em "database_id" aqui embaixo.
+
+name = "cbbc-quadra-live"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "build/web"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "cbbc-quadra-live"
+database_id = "ed516340-96cc-45cf-b4cd-b2e51d9edcd1"
