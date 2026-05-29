@@ -1,8 +1,9 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../models/player.dart';
 import '../theme/cbbc_theme.dart';
@@ -137,6 +138,11 @@ class _PortraitFrameState extends State<_PortraitFrame> {
   static final Map<String, _PortraitPhoto?> _resolved =
       <String, _PortraitPhoto?>{};
 
+  // package:http funciona nas duas plataformas: no Android usa o cliente
+  // nativo (dart:io) e na web usa fetch/XHR. O antigo NetworkAssetBundle
+  // dependia de dart:io e não baixava as fotos no Flutter Web (viewer).
+  static final http.Client _httpClient = http.Client();
+
   _PortraitPhoto? _photo;
 
   @override
@@ -187,10 +193,11 @@ class _PortraitFrameState extends State<_PortraitFrame> {
 
   static Future<_PortraitPhoto?> _load(String url) async {
     try {
-      final Uri uri = Uri.parse(url);
-      final ByteData data = await NetworkAssetBundle(uri).load(uri.toString());
-      final Uint8List bytes =
-          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+      final http.Response res = await _httpClient
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 15));
+      if (res.statusCode != 200) return null;
+      final Uint8List bytes = res.bodyBytes;
       final ui.Codec codec =
           await ui.instantiateImageCodec(bytes, targetWidth: 640);
       final ui.FrameInfo frame = await codec.getNextFrame();

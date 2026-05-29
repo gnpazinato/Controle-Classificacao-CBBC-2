@@ -24,6 +24,16 @@ link."
 
 ---
 
+## 2.3.4 — 2026-05-29
+
+- **Fotos das jogadoras agora carregam no viewer web.** O carregamento das
+  fotos usava `NetworkAssetBundle`, que depende de `dart:io` e **não funciona
+  no Flutter Web** (compilava, mas falhava em runtime → silhueta). Trocado por
+  `package:http`, que funciona nas duas plataformas (fetch na web, cliente
+  nativo no Android). Combinado com a reescrita pro `lh3.googleusercontent.com`
+  (v2.3.3), as fotos aparecem na transmissão. O carregamento no tablet segue
+  pela mesma engine de antes.
+
 ## 2.3.3 — 2026-05-29
 
 - **Corrige o link público que abria a quadra e voltava pra tela inicial.**
