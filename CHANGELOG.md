@@ -24,6 +24,15 @@ link."
 
 ---
 
+## 2.3.1 — 2026-05-29
+
+- **Nome do app** alterado de "Controle CBBC" para **"Controle Classificação
+  CBBC"** (ícone no tablet, PWA e título web).
+- **Mensagem de erro da transmissão mais honesta.** Antes, qualquer falha ao
+  iniciar a transmissão dizia "sem internet" — mesmo quando o problema era
+  outro (timeout, DNS, etc.). Agora mostra o erro real e distingue timeout,
+  facilitando o diagnóstico quando a transmissão não inicia no tablet.
+
 ## 2.3.0 — 2026-05-29
 
 - **Transmissão pública da quadra ao vivo (novo recurso).** Um botão

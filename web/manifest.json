@@ -1,6 +1,6 @@
 {
     "name": "Controle de Classificação CBBC",
-    "short_name": "Controle CBBC",
+    "short_name": "Controle Classificação CBBC",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1F66B6",

@@ -122,10 +122,17 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
       _showBroadcastDialog();
     } on BroadcastException catch (e) {
       if (!mounted) return;
-      _showSnack(e.message);
-    } catch (_) {
+      _showSnack(e.message, duration: const Duration(seconds: 6));
+    } on TimeoutException {
       if (!mounted) return;
-      _showSnack('Sem internet — a transmissão precisa de conexão.');
+      _showSnack('A transmissão demorou para responder. Tente novamente.',
+          duration: const Duration(seconds: 6));
+    } catch (e) {
+      // Mostra o erro real (DNS, TLS, parsing, etc.) em vez de assumir
+      // "sem internet" — facilita diagnosticar quando algo falha no tablet.
+      if (!mounted) return;
+      _showSnack('Falha na transmissão: $e',
+          duration: const Duration(seconds: 8));
     }
   }
 
@@ -249,9 +256,12 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     Navigator.of(context).popUntil((Route<void> r) => r.isFirst);
   }
 
-  void _showSnack(String message) {
+  void _showSnack(String message, {Duration? duration}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        duration: duration ?? const Duration(seconds: 4),
+      ),
     );
   }
 
