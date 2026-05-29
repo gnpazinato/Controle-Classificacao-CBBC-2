@@ -24,6 +24,19 @@ link."
 
 ---
 
+## 2.3.3 — 2026-05-29
+
+- **Corrige o link público que abria a quadra e voltava pra tela inicial.**
+  A rota `/v/<codigo>` empilhava a home (Splash) atrás do viewer e, após
+  ~2,5s, o timer do Splash trocava o viewer pela tela inicial. Agora a rota
+  inicial é resolvida por `onGenerateInitialRoutes`, abrindo **somente** o
+  viewer — ele permanece na tela.
+- **Fotos das jogadoras agora aparecem no viewer web.** O endpoint
+  `drive.google.com/uc` não envia CORS (e bloqueia o navegador), então as
+  fotos sumiam na página pública. O viewer passa a reescrever as URLs do
+  Drive para `lh3.googleusercontent.com/d/<id>`, que serve a imagem com CORS.
+  Vale só para a transmissão; o app no tablet continua usando o link normal.
+
 ## 2.3.2 — 2026-05-29
 
 - **Corrige a transmissão em tablets com Android antigo.** O handshake TLS

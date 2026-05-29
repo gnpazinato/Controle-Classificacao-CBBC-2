@@ -275,6 +275,41 @@ void main() {
     });
   });
 
+  group('webPhotoUrl — CORS para o viewer web', () {
+    test('reescreve uc?export=view do Drive para lh3 (com CORS)', () {
+      expect(
+        webPhotoUrl('https://drive.google.com/uc?export=view&id=abc123'),
+        'https://lh3.googleusercontent.com/d/abc123=w640',
+      );
+    });
+
+    test('extrai id de link /file/d/<id>/view', () {
+      expect(
+        webPhotoUrl('https://drive.google.com/file/d/XYZ789/view'),
+        'https://lh3.googleusercontent.com/d/XYZ789=w640',
+      );
+    });
+
+    test('mantém URLs não-Drive intactas', () {
+      expect(
+        webPhotoUrl('https://example.com/foto.jpg'),
+        'https://example.com/foto.jpg',
+      );
+    });
+
+    test('mantém URL lh3 já pronta', () {
+      expect(
+        webPhotoUrl('https://lh3.googleusercontent.com/d/abc=w640'),
+        'https://lh3.googleusercontent.com/d/abc=w640',
+      );
+    });
+
+    test('vazio/nulo → null', () {
+      expect(webPhotoUrl(''), isNull);
+      expect(webPhotoUrl(null), isNull);
+    });
+  });
+
   group('parsePlayerClass — tolerância a lixo de planilha', () {
     test('formatos simples', () {
       expect(parsePlayerClass('1.5'), 1.5);

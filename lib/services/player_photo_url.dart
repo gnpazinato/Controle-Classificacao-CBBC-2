@@ -25,6 +25,35 @@ String? normalizePlayerPhotoUrl(String? raw) {
   }).toString();
 }
 
+/// Reescreve uma URL de foto do Google Drive para o endpoint
+/// `lh3.googleusercontent.com/d/<id>`, que serve a imagem com cabeçalho
+/// **CORS** (`Access-Control-Allow-Origin: *`).
+///
+/// Necessário **na web** (viewer público da transmissão): o endpoint
+/// `drive.google.com/uc` não envia CORS, então o Flutter Web não consegue
+/// decodificar a imagem para o canvas (e ainda costuma retornar 403 para
+/// requisições fora do navegador). URLs que não são do Drive passam intactas.
+String? webPhotoUrl(String? raw) {
+  final String value = raw?.trim() ?? '';
+  if (value.isEmpty) return null;
+
+  final Uri? uri = Uri.tryParse(value);
+  if (uri == null) return value;
+
+  final String host = uri.host.toLowerCase();
+  // Já é um link googleusercontent (lh3...) — mantém.
+  if (host.endsWith('googleusercontent.com')) return value;
+  if (!host.endsWith('drive.google.com') &&
+      !host.endsWith('drive.usercontent.google.com')) {
+    return value;
+  }
+
+  final String? fileId = googleDriveFileIdFromUrl(value);
+  if (fileId == null || fileId.isEmpty) return value;
+
+  return 'https://lh3.googleusercontent.com/d/$fileId=w640';
+}
+
 String? googleDriveFileIdFromUrl(String raw) {
   final Uri? uri = Uri.tryParse(raw.trim());
   if (uri == null) return null;

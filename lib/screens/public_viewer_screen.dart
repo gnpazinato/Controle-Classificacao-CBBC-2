@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import '../constants/broadcast_config.dart';
 import '../models/match_state.dart';
+import '../services/player_photo_url.dart';
 import '../widgets/court_view.dart';
 
 /// Página pública (`/v/<codigo>`) — espelha **somente** a quadra ao vivo:
@@ -78,9 +79,10 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
         // Sessão recém-criada ainda sem estado: aguarda o próximo ciclo.
         return;
       }
-      final MatchState next = MatchState.fromJson(
-        envelope['state'] as Map<String, dynamic>,
-      );
+      final Map<String, dynamic> stateJson =
+          envelope['state'] as Map<String, dynamic>;
+      _rewritePhotosForWeb(stateJson);
+      final MatchState next = MatchState.fromJson(stateJson);
       final CourtStyle style =
           CourtStyle.fromName(envelope['courtStyle'] as String?);
       setState(() {
@@ -94,6 +96,22 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
       if (_state == null) setState(() => _status = _ViewerStatus.error);
     } finally {
       _fetching = false;
+    }
+  }
+
+  /// Reescreve as fotos do Drive para o endpoint com CORS, in-place no JSON
+  /// do estado, antes de montar o [MatchState]. Necessário só na web.
+  void _rewritePhotosForWeb(Map<String, dynamic> stateJson) {
+    for (final String teamKey in const <String>['teamA', 'teamB']) {
+      final Object? team = stateJson[teamKey];
+      if (team is! Map<String, dynamic>) continue;
+      final Object? players = team['players'];
+      if (players is! List) continue;
+      for (final Object? p in players) {
+        if (p is Map<String, dynamic> && p['photoUrl'] is String) {
+          p['photoUrl'] = webPhotoUrl(p['photoUrl'] as String);
+        }
+      }
     }
   }
 

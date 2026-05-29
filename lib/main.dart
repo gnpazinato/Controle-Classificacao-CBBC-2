@@ -47,21 +47,31 @@ class CbbcApp extends StatelessWidget {
       title: 'Controle Classificação CBBC',
       debugShowCheckedModeBanner: false,
       theme: buildCbbcTheme(),
-      // Fluxo normal inalterado: `/` → home. Na web, `/v/<codigo>` abre o
-      // viewer público da transmissão, isolado do resto do app. Para
-      // qualquer outra rota, devolve `null` e o `home` assume.
-      home: home,
-      onGenerateRoute: (RouteSettings settings) {
-        final Uri uri = Uri.parse(settings.name ?? '/');
-        if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'v') {
-          final String code = uri.pathSegments[1];
-          return MaterialPageRoute<void>(
-            settings: settings,
-            builder: (BuildContext _) => PublicViewerScreen(code: code),
-          );
-        }
-        return null;
-      },
+      // A rota inicial é resolvida por onGenerateInitialRoutes (importante na
+      // web): `/v/<codigo>` abre SÓ o viewer público — sem empilhar a home
+      // (Splash) atrás, senão o timer do Splash trocaria o viewer pela tela
+      // inicial. Qualquer outra rota inicial abre a home normalmente.
+      onGenerateInitialRoutes: (String initialRoute) =>
+          <Route<void>>[_routeFor(initialRoute, home)],
+      onGenerateRoute: (RouteSettings settings) =>
+          _routeFor(settings.name ?? '/', home),
+    );
+  }
+
+  /// Decide a rota a partir do nome: `/v/<codigo>` → viewer público;
+  /// qualquer outra → [home].
+  Route<void> _routeFor(String name, Widget home) {
+    final Uri uri = Uri.parse(name);
+    if (uri.pathSegments.length == 2 && uri.pathSegments.first == 'v') {
+      final String code = uri.pathSegments[1];
+      return MaterialPageRoute<void>(
+        settings: RouteSettings(name: name),
+        builder: (BuildContext _) => PublicViewerScreen(code: code),
+      );
+    }
+    return MaterialPageRoute<void>(
+      settings: RouteSettings(name: name),
+      builder: (BuildContext _) => home,
     );
   }
 }
