@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import '../constants/broadcast_config.dart';
+import 'broadcast_http_client.dart';
 
 /// Cliente da transmissão pública da quadra.
 ///
@@ -15,7 +16,8 @@ import '../constants/broadcast_config.dart';
 /// estado e uma requisição em voo por vez, então rajadas de toques não viram
 /// uma fila de POSTs.
 class BroadcastService {
-  BroadcastService({http.Client? client}) : _client = client ?? http.Client();
+  BroadcastService({http.Client? client})
+      : _client = client ?? createBroadcastClient();
 
   final http.Client _client;
 

@@ -5,12 +5,15 @@
 /// segue 100% funcional e nada disto é acionado.
 library;
 
-/// Base do projeto Cloudflare Pages que hospeda o viewer e as Functions.
+/// Host do projeto Cloudflare Pages que hospeda o viewer e as Functions.
 ///
 /// ⚠️ Precisa bater com o nome do projeto criado no Cloudflare Pages. Se você
 /// criar o projeto com outro nome, troque **apenas** esta linha. O link
-/// público gerado tem a forma `<base>/v/<codigo>`.
-const String kBroadcastBaseUrl = 'https://cbbc-quadra-live.pages.dev';
+/// público gerado tem a forma `https://<host>/v/<codigo>`.
+const String kBroadcastHost = 'cbbc-quadra-live.pages.dev';
+
+/// Base completa (https) derivada de [kBroadcastHost].
+const String kBroadcastBaseUrl = 'https://$kBroadcastHost';
 
 /// Intervalo do "heartbeat": reenvia o estado atual de tempos em tempos para
 /// manter a sessão viva no servidor (que expira após 1h de inatividade).

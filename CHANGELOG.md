@@ -24,6 +24,19 @@ link."
 
 ---
 
+## 2.3.2 — 2026-05-29
+
+- **Corrige a transmissão em tablets com Android antigo.** O handshake TLS
+  com o Cloudflare falhava com `CERTIFICATE_VERIFY_FAILED: certificate has
+  expired` — porque a raiz da Let's Encrypt (DST Root X3) expirou em 2021 e
+  não é mais reconhecida em Androids antigos (as fotos do Drive funcionavam
+  por usarem outra raiz). Agora o app aceita o certificado **somente** para o
+  host da transmissão (dado público), destravando a transmissão nesses
+  tablets sem afetar nenhuma outra conexão.
+- **Nome oficial "Controle Classificação CBBC" em todos os lugares**: ícone e
+  info do app no Android, título em janelas recentes, cabeçalho das telas,
+  PWA e título/descrição da web.
+
 ## 2.3.1 — 2026-05-29
 
 - **Nome do app** alterado de "Controle CBBC" para **"Controle Classificação

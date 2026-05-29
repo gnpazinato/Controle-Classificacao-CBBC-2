@@ -44,7 +44,7 @@ class CbbcApp extends StatelessWidget {
             duration: splashDuration ?? const Duration(milliseconds: 2500),
           );
     return MaterialApp(
-      title: 'Controle de Classificação CBBC',
+      title: 'Controle Classificação CBBC',
       debugShowCheckedModeBanner: false,
       theme: buildCbbcTheme(),
       // Fluxo normal inalterado: `/` → home. Na web, `/v/<codigo>` abre o

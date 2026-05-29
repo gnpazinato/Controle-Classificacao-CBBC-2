@@ -31,7 +31,7 @@ jobs:
             --project-name controle_classificacao_cbbc \
             --org br.org.cbbc \
             --platforms=android,web \
-            --description "Controle de Classificação CBBC"
+            --description "Controle Classificação CBBC"
           rm -f test/widget_test.dart
 
       - name: Install dependencies
