@@ -2,8 +2,7 @@
 Monta o Manual de Uso (PDF) do app Controle de Classificação CBBC v2.3.4.
 
 Usa as capturas renderizadas por app_screens.py (em build/) e o ReportLab
-para diagramar um documento profissional em pt-BR, destinado ao treinamento
-da CBBC e à autorização de compra pelo CPB.
+para diagramar um documento profissional em pt-BR — Manual de Uso para a CBBC.
 """
 import os
 from PIL import Image, ImageDraw
@@ -225,14 +224,13 @@ def cover_page(canvas, doc):
     canvas.roundRect(3 * cm, h - 19.2 * cm, w - 6 * cm, 4.4 * cm, 10, fill=1, stroke=1)
     canvas.setFillColor(BLUE_DEEP)
     canvas.setFont("Sans-Bold", 11)
-    canvas.drawCentredString(w / 2, h - 15.7 * cm, "Documento de treinamento e avaliação")
+    canvas.drawCentredString(w / 2, h - 15.7 * cm, "Manual de Uso para a CBBC")
     canvas.setFillColor(TEXT)
     canvas.setFont("Sans", 10)
     lines = [
-        "Material destinado ao treinamento dos comissários e equipes da CBBC e à",
-        "apresentação do aplicativo ao Comitê Paralímpico Brasileiro (CPB) para fins",
-        "de autorização de aquisição. Demonstra todas as funcionalidades por meio de",
-        "uma simulação de uso real (Supercopa — IREFES × ADESUL).",
+        "Guia de operação do aplicativo para os classificadores da CBBC durante",
+        "as partidas. Demonstra todas as funcionalidades por meio de uma",
+        "simulação de uso real (Supercopa — IREFES × ADESUL).",
     ]
     for i, ln in enumerate(lines):
         canvas.drawCentredString(w / 2, h - (16.5 + i * 0.62) * cm, ln)
@@ -283,23 +281,15 @@ def build():
     # ---- Sumário / Apresentação ----
     P("Apresentação", H1)
     P("O <b>Controle de Classificação CBBC</b> é um aplicativo desenvolvido para os "
-      "comissários de quadra e a comissão técnica acompanharem, em tempo real, a soma "
-      "dos <b>pontos funcionais</b> das equipes durante as partidas de basquetebol em "
+      "<b>classificadores da CBBC</b> acompanharem, em tempo real, a soma dos "
+      "<b>pontos funcionais</b> das equipes durante as partidas de basquetebol em "
       "cadeira de rodas. A cada atleta em quadra, o app soma automaticamente as classes "
       "funcionais e avisa imediatamente quando o limite permitido é ultrapassado — "
-      "eliminando erros de conta manual e dando mais segurança e agilidade à arbitragem.")
+      "eliminando erros de conta manual e dando mais segurança e agilidade ao trabalho.")
     P("Além do controle, a versão 2.3.4 introduz a <b>transmissão ao vivo da quadra</b>: "
       "com um toque, o app gera um <b>QR Code e um link público</b> que qualquer pessoa "
       "abre no navegador para ver o posicionamento e o placar de pontos em tempo quase "
-      "real — ideal para mesa, público e transmissões (OBS / YouTube).")
-    sp(0.2)
-    P("Para quem é este manual", H2)
-    story.extend(bullets([
-        "<b>Comissários e mesa técnica da CBBC</b> — como operar o app durante o jogo.",
-        "<b>Equipes e treinadores</b> — como preparar a planilha de atletas e entender as regras.",
-        "<b>Comitê Paralímpico Brasileiro (CPB)</b> — visão completa das funcionalidades para "
-        "fins de avaliação e autorização de aquisição.",
-    ]))
+      "real — ideal para a mesa e o público.")
     sp(0.2)
     P("Conteúdo", H2)
     story.extend(bullets([
@@ -466,7 +456,7 @@ def build():
     story.append(callout("Página pública", [
         "Abre em <b>qualquer navegador</b> (celular, computador ou TV) — não precisa do app.",
         "Mostra <b>posicionamento, fotos, números, classes</b> e o <b>placar de pontos</b> de cada equipe.",
-        "Reflete <b>em tempo quase real</b> cada toque feito pelo comissário no tablet.",
+        "Reflete <b>em tempo quase real</b> cada toque feito pelo classificador no tablet.",
         "Não expõe dados sensíveis nem controles — é somente visualização.",
     ]))
     story.append(PageBreak())

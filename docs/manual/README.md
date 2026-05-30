@@ -1,7 +1,10 @@
-# Manual de Uso (PDF) — gerador
+# Manual de Uso — gerador (PDF e Word)
 
-Scripts que geram o **Manual de Uso do Aplicativo Controle de Classificação
-CBBC** (`docs/Manual-Uso-Controle-Classificacao-CBBC.pdf`).
+Scripts que geram o **Manual de Uso para a CBBC** do aplicativo Controle de
+Classificação CBBC, em dois formatos:
+
+- `docs/Manual-Uso-Controle-Classificacao-CBBC.pdf` — versão final para leitura.
+- `docs/Manual-Uso-Controle-Classificacao-CBBC.docx` — versão **editável** (Word).
 
 O manual documenta a versão **2.3.4** do app — incluindo a transmissão ao vivo
 da quadra com QR code / link público — e usa **registros de tela** que
@@ -18,15 +21,18 @@ Flutter), numa simulação de uso real da Supercopa com as equipes **IREFES** e
 - `screens.py` — primitivos de desenho e componentes (paleta `CbbcColors`,
   camisa, chip de retrato, tabuleiro da quadra, molduras de dispositivo).
 - `app_screens.py` — monta cada tela do app como imagem (`build/*.png`).
-- `generate_manual.py` — diagrama o PDF final com ReportLab.
+- `generate_manual.py` — diagrama o **PDF** final com ReportLab.
+- `generate_manual_docx.py` — gera a versão **Word (.docx)** editável.
 
 ## Como regenerar
 
 ```bash
-pip install pillow reportlab qrcode pypdfium2
+pip install pillow reportlab qrcode python-docx pypdfium2
 cd docs/manual
-python3 app_screens.py      # renderiza as capturas em build/
-python3 generate_manual.py  # monta o PDF em docs/
+python3 app_screens.py            # renderiza as capturas em build/
+python3 generate_manual.py        # monta o PDF em docs/
+python3 generate_manual_docx.py   # monta o Word (.docx) em docs/
 ```
 
-Saída: `docs/Manual-Uso-Controle-Classificacao-CBBC.pdf`.
+Saídas em `docs/`: `Manual-Uso-Controle-Classificacao-CBBC.pdf` e
+`Manual-Uso-Controle-Classificacao-CBBC.docx`.
