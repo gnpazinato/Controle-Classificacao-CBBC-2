@@ -1,0 +1,4 @@
+# Artefatos intermediários de renderização (regeneráveis)
+build/
+
+__pycache__/
