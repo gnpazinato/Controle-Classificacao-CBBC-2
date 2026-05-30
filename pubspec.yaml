@@ -1,7 +1,7 @@
 name: controle_classificacao_cbbc
-description: "Controle de Classificação CBBC — app offline para comissários conferirem pontos funcionais em quadra (basquetebol em cadeira de rodas)."
+description: "Controle Classificação CBBC — app offline para comissários conferirem pontos funcionais em quadra (basquetebol em cadeira de rodas)."
 publish_to: "none"
-version: 2.2.1+13
+version: 2.3.4+18
 
 environment:
   sdk: ">=3.4.0 <4.0.0"
@@ -10,10 +10,14 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
   cupertino_icons: ^1.0.8
   excel: ^4.0.6
   file_picker: ^8.1.2
+  http: ^1.2.0
   path_provider: ^2.1.4
+  qr_flutter: ^4.1.0
   shared_preferences: ^2.3.2
   syncfusion_flutter_pdf: ^27.1.48
   vibration: ^2.0.0

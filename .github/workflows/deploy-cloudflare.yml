@@ -1,0 +1,52 @@
+name: Deploy to Cloudflare Pages
+
+# Build do Flutter Web + deploy direto no Cloudflare Pages (Direct Upload via
+# wrangler). As Functions em functions/ e o binding D1 do wrangler.toml vão
+# junto. Exige os secrets CLOUDFLARE_API_TOKEN e CLOUDFLARE_ACCOUNT_ID.
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: "3.32.0"
+          cache: true
+
+      - name: Generate web project files
+        run: |
+          flutter create . \
+            --project-name controle_classificacao_cbbc \
+            --org br.org.cbbc \
+            --platforms=android,web \
+            --description "Controle Classificação CBBC"
+          rm -f test/widget_test.dart
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build web (release)
+        run: flutter build web --release --base-href "/"
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # Sem diretório no comando: o wrangler.toml define
+          # pages_build_output_dir = build/web, name e o binding D1.
+          # --branch=main força deploy de produção (URL fixa .pages.dev),
+          # mesmo rodando a partir de uma branch feat/*.
+          command: pages deploy --branch=main --commit-dirty=true

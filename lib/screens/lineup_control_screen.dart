@@ -1,34 +1,21 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../constants/point_limits.dart';
 import '../models/match_state.dart';
 import '../models/player.dart';
 import '../models/team.dart';
+import '../services/broadcast_service.dart';
 import '../services/cache_service.dart';
 import '../services/vibration_service.dart';
 import '../theme/cbbc_theme.dart';
 import '../widgets/cbbc_logo_header.dart';
+import '../widgets/court_view.dart';
 import '../widgets/player_jersey_icon.dart';
 import '../widgets/player_portrait_chip.dart';
-
-/// Estilo da quadra escolhido pelo usuário durante a partida.
-///
-/// Ambos os assets atuais são landscape (1700 × 910) e precisam de
-/// `quarterTurns: 1` para caber no container portrait da tela. O campo
-/// `quarterTurns` fica configurável caso uma futura arte chegue já em
-/// orientação portrait.
-enum CourtStyle {
-  claro('Clara', 'assets/images/quadra1.png', 1),
-  escuro('Escura', 'assets/images/quadra2.png', 1);
-
-  const CourtStyle(this.label, this.assetPath, this.quarterTurns);
-
-  final String label;
-  final String assetPath;
-  final int quarterTurns;
-}
 
 /// Tela principal da partida.
 class LineupControlScreen extends StatefulWidget {
@@ -54,9 +41,11 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
   late MatchState _state;
   late final CacheService _cache;
   late final VibrationService _vibration;
+  final BroadcastService _broadcast = BroadcastService();
 
   bool _wasOverA = false;
   bool _wasOverB = false;
+  bool _broadcasting = false;
   CourtStyle _courtStyle = CourtStyle.claro;
   bool _didPrecacheCourts = false;
 
@@ -91,12 +80,83 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     }
   }
 
+  @override
+  void dispose() {
+    _broadcast.dispose();
+    super.dispose();
+  }
+
   void _setCourtStyle(CourtStyle next) {
     if (next == _courtStyle) return;
     setState(() => _courtStyle = next);
+    _pushBroadcast();
   }
 
   Future<void> _persist() => _cache.saveMatchState(_state);
+
+  /// Envelope enviado à transmissão: estado da partida + estilo da quadra
+  /// (que não vive no `MatchState`, mas o viewer precisa pra desenhar igual).
+  Map<String, dynamic> _broadcastEnvelope() => <String, dynamic>{
+        'courtStyle': _courtStyle.name,
+        'state': _state.toJson(),
+      };
+
+  /// Empurra o estado atual pra transmissão, se estiver ativa. Silencioso.
+  void _pushBroadcast() {
+    if (_broadcast.isLive) _broadcast.push(_broadcastEnvelope());
+  }
+
+  void _onBroadcastPressed() {
+    if (_broadcast.isLive) {
+      _showBroadcastDialog();
+    } else {
+      unawaited(_startBroadcast());
+    }
+  }
+
+  Future<void> _startBroadcast() async {
+    try {
+      await _broadcast.start(_broadcastEnvelope());
+      if (!mounted) return;
+      setState(() => _broadcasting = true);
+      _showBroadcastDialog();
+    } on BroadcastException catch (e) {
+      if (!mounted) return;
+      _showSnack(e.message, duration: const Duration(seconds: 6));
+    } on TimeoutException {
+      if (!mounted) return;
+      _showSnack('A transmissão demorou para responder. Tente novamente.',
+          duration: const Duration(seconds: 6));
+    } catch (e) {
+      // Mostra o erro real (DNS, TLS, parsing, etc.) em vez de assumir
+      // "sem internet" — facilita diagnosticar quando algo falha no tablet.
+      if (!mounted) return;
+      _showSnack('Falha na transmissão: $e',
+          duration: const Duration(seconds: 8));
+    }
+  }
+
+  Future<void> _stopBroadcast() async {
+    await _broadcast.stop();
+    if (!mounted) return;
+    setState(() => _broadcasting = false);
+  }
+
+  void _showBroadcastDialog() {
+    final String? url = _broadcast.publicUrl;
+    if (url == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (BuildContext ctx) => _BroadcastDialog(
+        url: url,
+        onClose: () => Navigator.of(ctx).pop(),
+        onStop: () {
+          Navigator.of(ctx).pop();
+          unawaited(_stopBroadcast());
+        },
+      ),
+    );
+  }
 
   void _onPlayerTap(Player player, _Side side) {
     final Set<String> bucket = side == _Side.a
@@ -113,6 +173,7 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     setState(() {});
     _checkLimitCrossing();
     unawaited(_persist());
+    _pushBroadcast();
   }
 
   void _onPointLimitChanged(double next) {
@@ -121,6 +182,7 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     });
     _checkLimitCrossing();
     unawaited(_persist());
+    _pushBroadcast();
   }
 
   void _checkLimitCrossing() {
@@ -136,18 +198,21 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     setState(() => _state.clearTeamA());
     _checkLimitCrossing();
     unawaited(_persist());
+    _pushBroadcast();
   }
 
   void _clearTeamB() {
     setState(() => _state.clearTeamB());
     _checkLimitCrossing();
     unawaited(_persist());
+    _pushBroadcast();
   }
 
   void _clearAll() {
     setState(() => _state.clearAll());
     _checkLimitCrossing();
     unawaited(_persist());
+    _pushBroadcast();
   }
 
   Future<bool> _confirmLeave() async {
@@ -191,9 +256,12 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     Navigator.of(context).popUntil((Route<void> r) => r.isFirst);
   }
 
-  void _showSnack(String message) {
+  void _showSnack(String message, {Duration? duration}) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      SnackBar(
+        content: Text(message),
+        duration: duration ?? const Duration(seconds: 4),
+      ),
     );
   }
 
@@ -212,6 +280,17 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
         appBar: AppBar(
           title: const CbbcAppBarTitle(text: 'Quadra ao vivo'),
           actions: <Widget>[
+            IconButton(
+              key: const Key('broadcast-button'),
+              tooltip: _broadcasting
+                  ? 'Transmissão ao vivo — ver link'
+                  : 'Transmitir a quadra ao vivo',
+              onPressed: _onBroadcastPressed,
+              icon: Icon(
+                _broadcasting ? Icons.cast_connected : Icons.cast,
+                color: _broadcasting ? CbbcColors.orange : Colors.white,
+              ),
+            ),
             _PointLimitMenu(
               current: _state.pointLimit,
               onChanged: _onPointLimitChanged,
@@ -837,45 +916,9 @@ class _CourtView extends StatelessWidget {
   final ValueChanged<CourtStyle> onCourtStyleChanged;
   final _PlayerTapCallback onPlayerTap;
 
-  static const double _aspectRatio = 1504 / 2816;
-
-  // Formação 3+2: linha de frente com 3 atletas perto do garrafão, linha
-  // de fundo com 2 atletas mais afastados, garantindo folga no meio campo
-  // entre as duas equipes.
-  static const List<Offset> _teamATargets = <Offset>[
-    Offset(0.22, 0.13),
-    Offset(0.50, 0.13),
-    Offset(0.78, 0.13),
-    Offset(0.36, 0.37),
-    Offset(0.64, 0.37),
-  ];
-
-  static const List<Offset> _teamBTargets = <Offset>[
-    Offset(0.22, 0.87),
-    Offset(0.50, 0.87),
-    Offset(0.78, 0.87),
-    Offset(0.36, 0.63),
-    Offset(0.64, 0.63),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final List<Player?> teamA = state.teamASlotPlayers;
-    final List<Player?> teamB = state.teamBSlotPlayers;
-    final bool teamAEmpty = teamA.every((Player? p) => p == null);
-    final bool teamBEmpty = teamB.every((Player? p) => p == null);
-    final bool hasAnyPlayerOnCourt = !teamAEmpty || !teamBEmpty;
-
-    final Widget courtImage = RotatedBox(
-      quarterTurns: courtStyle.quarterTurns,
-      child: Image(
-        image: AssetImage(courtStyle.assetPath),
-        fit: BoxFit.cover,
-      ),
-    );
-
     return Center(
-      key: const Key('court-view'),
       child: Padding(
         padding: const EdgeInsets.all(10),
         child: Column(
@@ -883,136 +926,11 @@ class _CourtView extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Flexible(
-              child: AspectRatio(
-                aspectRatio: _aspectRatio,
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: CbbcColors.slate200, width: 1.5),
-                    boxShadow: const <BoxShadow>[
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 10,
-                        offset: Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(11),
-                    child: LayoutBuilder(
-                      builder: (BuildContext _, BoxConstraints c) {
-                final double w = c.maxWidth;
-                final double h = c.maxHeight;
-                // Tudo aqui dentro escala com w/h da quadra. Sem clamps
-                // absolutos pra que tablets variados (8" portrait, 11"
-                // landscape) gerem o mesmo desenho proporcional.
-                final double slotMaxWidth = w * 0.22;
-                final double slotMaxHeight = h * 0.16;
-                // Badge dos cantos: ancorado na **largura** da quadra
-                // (não na altura). A quadra é sempre portrait, então w é
-                // a dimensão estreita e dita o quão grande os chips
-                // ficam — alinhar o badge a w faz com que ele mantenha
-                // a mesma relação visual com o chip independente da
-                // orientação do tablet.
-                final double badgeAnchor = w;
-                final double badgeMargin = badgeAnchor * 0.018;
-                return Stack(
-                  alignment: Alignment.center,
-                  children: <Widget>[
-                    // Auto Broadcast Dim: só aplica Opacity quando há
-                    // atletas em quadra, evitando pass de composição à toa.
-                    if (hasAnyPlayerOnCourt)
-                      Positioned.fill(
-                        child: Opacity(
-                          opacity: 0.76,
-                          child: courtImage,
-                        ),
-                      )
-                    else
-                      Positioned.fill(child: courtImage),
-                    if (hasAnyPlayerOnCourt)
-                      Positioned.fill(
-                        child: ColoredBox(
-                          color: Colors.white.withValues(alpha: 0.18),
-                        ),
-                      ),
-                    if (teamAEmpty)
-                      Align(
-                        alignment: const Alignment(0, -0.55),
-                        child: _CourtHint(
-                          text: 'Toque nos atletas da ${state.teamA.displayName}',
-                        ),
-                      ),
-                    if (teamBEmpty)
-                      Align(
-                        alignment: const Alignment(0, 0.55),
-                        child: _CourtHint(
-                          text: 'Toque nos atletas da ${state.teamB.displayName}',
-                        ),
-                      ),
-                    // Chips em quadra. Key estável por atleta evita que a
-                    // remoção de uma jogadora reaproveite o slot de outra
-                    // (causa do "flash" de várias fotos ao tirar atleta).
-                    for (int i = 0; i < 5; i++)
-                      if (teamA[i] != null)
-                        _CourtPlayerSlot(
-                          key: ValueKey<String>('court-a-${teamA[i]!.id}'),
-                          player: teamA[i]!,
-                          jerseyColor: state.teamAJerseyColor,
-                          isBonusEligible: state.qualifiesForBonus(teamA[i]!),
-                          target: _teamATargets[i],
-                          width: w,
-                          height: h,
-                          slotMaxWidth: slotMaxWidth,
-                          slotMaxHeight: slotMaxHeight,
-                          onTap: () => onPlayerTap(teamA[i]!, _Side.a),
-                        ),
-                    for (int i = 0; i < 5; i++)
-                      if (teamB[i] != null)
-                        _CourtPlayerSlot(
-                          key: ValueKey<String>('court-b-${teamB[i]!.id}'),
-                          player: teamB[i]!,
-                          jerseyColor: state.teamBJerseyColor,
-                          isBonusEligible: state.qualifiesForBonus(teamB[i]!),
-                          target: _teamBTargets[i],
-                          width: w,
-                          height: h,
-                          slotMaxWidth: slotMaxWidth,
-                          slotMaxHeight: slotMaxHeight,
-                          onTap: () => onPlayerTap(teamB[i]!, _Side.b),
-                        ),
-                    // Placar espelho — canto superior esquerdo (Equipe A)
-                    // e inferior direito (Equipe B). Renderizado por último
-                    // pra ficar acima dos chips quando houver sobreposição.
-                    Positioned(
-                      top: badgeMargin,
-                      left: badgeMargin,
-                      child: _CourtScoreBadge(
-                        total: state.totalPointsTeamA,
-                        limit: state.effectiveLimitTeamA,
-                        isOver: state.isTeamAOverLimit,
-                        bonusActive: state.hasBonusInCourtTeamA,
-                        anchor: badgeAnchor,
-                      ),
-                    ),
-                    Positioned(
-                      bottom: badgeMargin,
-                      right: badgeMargin,
-                      child: _CourtScoreBadge(
-                        total: state.totalPointsTeamB,
-                        limit: state.effectiveLimitTeamB,
-                        isOver: state.isTeamBOverLimit,
-                        bonusActive: state.hasBonusInCourtTeamB,
-                        anchor: badgeAnchor,
-                      ),
-                    ),
-                  ],
-                );
-              },
-                    ),
-                  ),
-                ),
+              child: CourtBoard(
+                state: state,
+                courtStyle: courtStyle,
+                onPlayerTap: (Player p, bool isTeamA) =>
+                    onPlayerTap(p, isTeamA ? _Side.a : _Side.b),
               ),
             ),
             const SizedBox(height: 10),
@@ -1102,180 +1020,6 @@ class _CourtStyleSwatch extends StatelessWidget {
               fit: BoxFit.cover,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _CourtScoreBadge extends StatelessWidget {
-  const _CourtScoreBadge({
-    required this.total,
-    required this.limit,
-    required this.isOver,
-    required this.bonusActive,
-    required this.anchor,
-  });
-
-  final double total;
-  final double limit;
-  final bool isOver;
-  final bool bonusActive;
-
-  /// Dimensão de referência (menor lado da quadra). Tudo aqui é definido
-  /// como % desse ancoramento, então o badge encolhe junto com a quadra
-  /// em telas pequenas e cresce em tablets grandes.
-  final double anchor;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color totalColor =
-        isOver ? CbbcColors.alertRed : CbbcColors.blueDeep;
-    // Dimensões proporcionais à largura da quadra. Calibrado para que o
-    // badge nunca invada a área dos chips dos cantos (front line em
-    // x ≈ 0.22; chip metade-largura ≈ 0.11 → badge limitado a ~0.10 da
-    // largura da quadra).
-    final double fontTotal = (anchor * 0.034).clamp(11.0, 22.0);
-    final double fontLimit = fontTotal * 0.78;
-    final double padH = (anchor * 0.022).clamp(6.0, 14.0);
-    final double padV = (anchor * 0.014).clamp(3.0, 8.0);
-    final double iconSize = fontTotal * 0.95;
-    final double radius = (anchor * 0.022).clamp(7.0, 12.0);
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: <Color>[
-            Colors.white.withValues(alpha: 0.97),
-            const Color(0xFFF1F5F9).withValues(alpha: 0.97),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(radius),
-        boxShadow: <BoxShadow>[
-          // Sombra "botão flutuante" — mesmo padrão dos chips.
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.40),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-          if (isOver)
-            BoxShadow(
-              color: CbbcColors.alertRed.withValues(alpha: 0.45),
-              blurRadius: 10,
-              spreadRadius: 1,
-            ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: <Widget>[
-          Text(
-            total.toStringAsFixed(1),
-            style: TextStyle(
-              color: totalColor,
-              fontSize: fontTotal,
-              fontWeight: FontWeight.w900,
-              height: 1,
-              fontFeatures: const <FontFeature>[
-                FontFeature.tabularFigures(),
-              ],
-            ),
-          ),
-          Text(
-            ' / ${limit.toStringAsFixed(1)}',
-            style: TextStyle(
-              color: CbbcColors.textSecondary,
-              fontSize: fontLimit,
-              fontWeight: FontWeight.w600,
-              height: 1,
-              fontFeatures: const <FontFeature>[
-                FontFeature.tabularFigures(),
-              ],
-            ),
-          ),
-          if (bonusActive) ...<Widget>[
-            SizedBox(width: padH * 0.4),
-            Icon(
-              Icons.star,
-              size: iconSize,
-              color: CbbcColors.orange,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _CourtHint extends StatelessWidget {
-  const _CourtHint({required this.text});
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: const TextStyle(
-          color: CbbcColors.textPrimary,
-          fontSize: 12,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-    );
-  }
-}
-
-class _CourtPlayerSlot extends StatelessWidget {
-  const _CourtPlayerSlot({
-    super.key,
-    required this.player,
-    required this.jerseyColor,
-    required this.isBonusEligible,
-    required this.target,
-    required this.width,
-    required this.height,
-    required this.slotMaxWidth,
-    required this.slotMaxHeight,
-    required this.onTap,
-  });
-
-  final Player player;
-  final JerseyColor jerseyColor;
-  final bool isBonusEligible;
-  final Offset target;
-  final double width;
-  final double height;
-  final double slotMaxWidth;
-  final double slotMaxHeight;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      left: width * target.dx,
-      top: height * target.dy,
-      child: FractionalTranslation(
-        translation: const Offset(-0.5, -0.5),
-        child: PlayerPortraitChip(
-          player: player,
-          jerseyColor: jerseyColor,
-          isBonusEligible: isBonusEligible,
-          maxWidth: slotMaxWidth,
-          maxHeight: slotMaxHeight,
-          onTap: onTap,
         ),
       ),
     );
@@ -1372,6 +1116,109 @@ class _OperationalButtons extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+/// Janelinha (pop-up) com o QR code + link da transmissão. Não altera o
+/// layout da partida — abre por cima e fecha sem deixar rastro. O botão
+/// discreto da AppBar reabre quando quiser.
+class _BroadcastDialog extends StatelessWidget {
+  const _BroadcastDialog({
+    required this.url,
+    required this.onClose,
+    required this.onStop,
+  });
+
+  final String url;
+  final VoidCallback onClose;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      key: const Key('broadcast-dialog'),
+      title: const Text('Transmissão ao vivo'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          const Text(
+            'Aponte a câmera no QR code ou copie o link. A página pública '
+            'mostra apenas a quadra ao vivo.',
+            style: TextStyle(fontSize: 13, color: CbbcColors.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: CbbcColors.slate200),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(10),
+              child: QrImageView(
+                data: url,
+                version: QrVersions.auto,
+                size: 200,
+                backgroundColor: Colors.white,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          InkWell(
+            key: const Key('broadcast-copy-link'),
+            onTap: () => _copy(context),
+            borderRadius: BorderRadius.circular(8),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: CbbcColors.slate50,
+                border: Border.all(color: CbbcColors.slate200),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      url,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.copy_rounded,
+                      size: 18, color: CbbcColors.blue),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          key: const Key('broadcast-stop-button'),
+          onPressed: onStop,
+          style: TextButton.styleFrom(foregroundColor: CbbcColors.alertRed),
+          child: const Text('Encerrar'),
+        ),
+        FilledButton(
+          key: const Key('broadcast-close-button'),
+          onPressed: onClose,
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+
+  void _copy(BuildContext context) {
+    unawaited(Clipboard.setData(ClipboardData(text: url)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Link copiado.'),
+        duration: Duration(seconds: 2),
       ),
     );
   }

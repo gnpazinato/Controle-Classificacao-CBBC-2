@@ -24,6 +24,70 @@ link."
 
 ---
 
+## 2.3.4 — 2026-05-29
+
+- **Fotos das jogadoras agora carregam no viewer web.** O carregamento das
+  fotos usava `NetworkAssetBundle`, que depende de `dart:io` e **não funciona
+  no Flutter Web** (compilava, mas falhava em runtime → silhueta). Trocado por
+  `package:http`, que funciona nas duas plataformas (fetch na web, cliente
+  nativo no Android). Combinado com a reescrita pro `lh3.googleusercontent.com`
+  (v2.3.3), as fotos aparecem na transmissão. O carregamento no tablet segue
+  pela mesma engine de antes.
+
+## 2.3.3 — 2026-05-29
+
+- **Corrige o link público que abria a quadra e voltava pra tela inicial.**
+  A rota `/v/<codigo>` empilhava a home (Splash) atrás do viewer e, após
+  ~2,5s, o timer do Splash trocava o viewer pela tela inicial. Agora a rota
+  inicial é resolvida por `onGenerateInitialRoutes`, abrindo **somente** o
+  viewer — ele permanece na tela.
+- **Fotos das jogadoras agora aparecem no viewer web.** O endpoint
+  `drive.google.com/uc` não envia CORS (e bloqueia o navegador), então as
+  fotos sumiam na página pública. O viewer passa a reescrever as URLs do
+  Drive para `lh3.googleusercontent.com/d/<id>`, que serve a imagem com CORS.
+  Vale só para a transmissão; o app no tablet continua usando o link normal.
+
+## 2.3.2 — 2026-05-29
+
+- **Corrige a transmissão em tablets com Android antigo.** O handshake TLS
+  com o Cloudflare falhava com `CERTIFICATE_VERIFY_FAILED: certificate has
+  expired` — porque a raiz da Let's Encrypt (DST Root X3) expirou em 2021 e
+  não é mais reconhecida em Androids antigos (as fotos do Drive funcionavam
+  por usarem outra raiz). Agora o app aceita o certificado **somente** para o
+  host da transmissão (dado público), destravando a transmissão nesses
+  tablets sem afetar nenhuma outra conexão.
+- **Nome oficial "Controle Classificação CBBC" em todos os lugares**: ícone e
+  info do app no Android, título em janelas recentes, cabeçalho das telas,
+  PWA e título/descrição da web.
+
+## 2.3.1 — 2026-05-29
+
+- **Nome do app** alterado de "Controle CBBC" para **"Controle Classificação
+  CBBC"** (ícone no tablet, PWA e título web).
+- **Mensagem de erro da transmissão mais honesta.** Antes, qualquer falha ao
+  iniciar a transmissão dizia "sem internet" — mesmo quando o problema era
+  outro (timeout, DNS, etc.). Agora mostra o erro real e distingue timeout,
+  facilitando o diagnóstico quando a transmissão não inicia no tablet.
+
+## 2.3.0 — 2026-05-29
+
+- **Transmissão pública da quadra ao vivo (novo recurso).** Um botão
+  discreto na barra superior da tela de jogo (ícone de transmissão) inicia,
+  com um toque, uma transmissão pública só da quadra — chips das atletas e
+  placar nos cantos, sem barras nem botões. Abre uma janelinha (pop-up) com
+  **QR code** e o **link copiável**; o mesmo botão reabre a janelinha quando
+  fechada. O link tem a forma `…/v/<codigo>` (código de 5 caracteres).
+  - **Funciona só online**, igual às fotos do Google Drive: sem internet, o
+    app segue 100% normal e o botão apenas avisa que precisa de conexão.
+  - A página pública atualiza em tempo quase real (~1s) e suporta vários
+    espectadores ao mesmo tempo (ideal para espelhar no OBS → YouTube).
+  - **Encerrar** na janelinha derruba a transmissão; ela também expira
+    sozinha após 1h sem atividade.
+  - Backend serverless no Cloudflare Pages + D1 (free tier). O widget da
+    quadra foi extraído para `lib/widgets/court_view.dart` e é reusado
+    idêntico na tela de jogo e no viewer público — sem mudança visual na
+    partida.
+
 ## 2.2.1 — 2026-05-29
 
 - **Correção do crop em fotos tiradas "de longe".** Algumas atletas

@@ -8,7 +8,7 @@ const String kCbbcLogoAsset = 'assets/images/cbbc-logo.png';
 class CbbcBrandHeader extends StatelessWidget {
   const CbbcBrandHeader({
     super.key,
-    this.title = 'Controle de Classificação CBBC',
+    this.title = 'Controle Classificação CBBC',
     this.subtitle,
     this.maxLogoHeight = 140,
   });

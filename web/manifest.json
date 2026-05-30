@@ -1,11 +1,11 @@
 {
-    "name": "Controle de Classificação CBBC",
-    "short_name": "Controle CBBC",
+    "name": "Controle Classificação CBBC",
+    "short_name": "Controle Classificação CBBC",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#1F66B6",
     "theme_color": "#1F66B6",
-    "description": "Controle de Classificação CBBC",
+    "description": "Controle Classificação CBBC",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
