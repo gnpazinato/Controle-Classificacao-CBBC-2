@@ -131,19 +131,19 @@ class _PortraitFrame extends StatefulWidget {
 }
 
 class _PortraitFrameState extends State<_PortraitFrame> {
-  static final Map<String, Future<_PortraitPhoto?>> _cache =
-      <String, Future<_PortraitPhoto?>>{};
+  static final Map<String, Future<PortraitPhoto?>> _cache =
+      <String, Future<PortraitPhoto?>>{};
   // Cache síncrono: após o future resolver, guardamos o resultado aqui pra
   // que mounts subsequentes do mesmo URL pulem o frame de fallback.
-  static final Map<String, _PortraitPhoto?> _resolved =
-      <String, _PortraitPhoto?>{};
+  static final Map<String, PortraitPhoto?> _resolved =
+      <String, PortraitPhoto?>{};
 
   // package:http funciona nas duas plataformas: no Android usa o cliente
   // nativo (dart:io) e na web usa fetch/XHR. O antigo NetworkAssetBundle
   // dependia de dart:io e não baixava as fotos no Flutter Web (viewer).
   static final http.Client _httpClient = http.Client();
 
-  _PortraitPhoto? _photo;
+  PortraitPhoto? _photo;
 
   @override
   void initState() {
@@ -172,7 +172,7 @@ class _PortraitFrameState extends State<_PortraitFrame> {
     }
     // Cold load: dispara o future e aguarda; mantém _photo null até resolver.
     _photo = null;
-    _futureFor(url).then((_PortraitPhoto? photo) {
+    _futureFor(url).then((PortraitPhoto? photo) {
       if (!mounted || widget.photoUrl != url) return;
       setState(() {
         _photo = photo;
@@ -183,15 +183,15 @@ class _PortraitFrameState extends State<_PortraitFrame> {
   /// Compartilhado entre o chip e o pré-carregador. Garante que toda
   /// resolução popule também [_resolved] pra permitir mounts subsequentes
   /// sem o frame de silhueta.
-  static Future<_PortraitPhoto?> _futureFor(String url) {
+  static Future<PortraitPhoto?> _futureFor(String url) {
     return _cache.putIfAbsent(url, () async {
-      final _PortraitPhoto? photo = await _load(url);
+      final PortraitPhoto? photo = await _load(url);
       _resolved[url] = photo;
       return photo;
     });
   }
 
-  static Future<_PortraitPhoto?> _load(String url) async {
+  static Future<PortraitPhoto?> _load(String url) async {
     try {
       final http.Response res = await _httpClient
           .get(Uri.parse(url))
@@ -203,7 +203,7 @@ class _PortraitFrameState extends State<_PortraitFrame> {
       final ui.FrameInfo frame = await codec.getNextFrame();
       final ui.Image image = frame.image;
       final Rect sourceRect = await _computeSourceRect(image);
-      return _PortraitPhoto(image: image, sourceRect: sourceRect);
+      return PortraitPhoto(image: image, sourceRect: sourceRect);
     } catch (_) {
       return null;
     }
@@ -470,7 +470,7 @@ class _PortraitFrameState extends State<_PortraitFrame> {
 
   @override
   Widget build(BuildContext context) {
-    final _PortraitPhoto? photo = _photo;
+    final PortraitPhoto? photo = _photo;
     return CustomPaint(
       painter: _PortraitFramePainter(),
       child: ClipPath(
@@ -664,8 +664,11 @@ class _BonusStarBadge extends StatelessWidget {
   }
 }
 
-class _PortraitPhoto {
-  const _PortraitPhoto({required this.image, required this.sourceRect});
+/// Foto decodificada + retângulo de recorte "rosto + ombros" calculado
+/// pelo detector de sujeito. Pública porque o avatar da comissão técnica
+/// (`team_roster_list.dart`) reutiliza o mesmo recorte dos chips.
+class PortraitPhoto {
+  const PortraitPhoto({required this.image, required this.sourceRect});
 
   final ui.Image image;
   final Rect sourceRect;
@@ -688,7 +691,7 @@ class _BgSample {
 class _PortraitPhotoPainter extends CustomPainter {
   const _PortraitPhotoPainter(this.photo);
 
-  final _PortraitPhoto photo;
+  final PortraitPhoto photo;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -779,6 +782,14 @@ abstract class PlayerPhotoPrecache {
   static Future<void> precache(String url) async {
     if (url.trim().isEmpty) return;
     await _PortraitFrameState._futureFor(url);
+  }
+
+  /// Resolve a foto com o recorte facial já calculado — mesmo cache dos
+  /// chips. Usado pelo avatar da comissão técnica pra cortar igual às
+  /// fotos das atletas. `null` em URL vazia ou falha de download.
+  static Future<PortraitPhoto?> resolve(String url) {
+    if (url.trim().isEmpty) return Future<PortraitPhoto?>.value(null);
+    return _PortraitFrameState._futureFor(url);
   }
 
   /// Pre-carrega URLs em lotes de [concurrency] paralelos (default 6),

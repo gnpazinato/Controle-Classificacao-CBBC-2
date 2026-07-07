@@ -1,7 +1,6 @@
-import 'dart:typed_data';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 
 import '../models/match_state.dart';
 import '../models/player.dart';
@@ -9,6 +8,7 @@ import '../models/staff_member.dart';
 import '../models/team.dart';
 import '../theme/cbbc_theme.dart';
 import 'player_jersey_icon.dart';
+import 'player_portrait_chip.dart';
 
 /// Relação de atletas de uma equipe, com destaque nas selecionadas em
 /// quadra. Extraída da tela de jogo para ser reutilizada **idêntica** na
@@ -332,10 +332,12 @@ class _StaffCard extends StatelessWidget {
   }
 }
 
-/// Foto redonda do membro da comissão. Baixa via `package:http` (funciona
-/// no Android e no Flutter Web) com cache estático — sem o crop facial
-/// pesado das atletas: corte circular alinhado ao topo já favorece o rosto
-/// nas fotos de retrato.
+/// Foto redonda do membro da comissão. Reutiliza o pipeline das atletas
+/// ([PlayerPhotoPrecache.resolve]): download via `package:http` (funciona
+/// no Android e no Flutter Web), cache estático e o **mesmo recorte
+/// facial** dos chips — sem faixa de fundo sobrando acima da cabeça. Do
+/// retângulo "rosto + ombros" calculado, o círculo usa o quadrado
+/// ancorado no topo (rosto + começo dos ombros).
 class _StaffAvatar extends StatefulWidget {
   const _StaffAvatar({required this.photoUrl, required this.size});
 
@@ -347,12 +349,7 @@ class _StaffAvatar extends StatefulWidget {
 }
 
 class _StaffAvatarState extends State<_StaffAvatar> {
-  static final Map<String, Future<Uint8List?>> _cache =
-      <String, Future<Uint8List?>>{};
-  static final Map<String, Uint8List?> _resolved = <String, Uint8List?>{};
-  static final http.Client _httpClient = http.Client();
-
-  Uint8List? _bytes;
+  PortraitPhoto? _photo;
 
   @override
   void initState() {
@@ -369,35 +366,19 @@ class _StaffAvatarState extends State<_StaffAvatar> {
   void _resolvePhoto() {
     final String? url = widget.photoUrl;
     if (url == null || url.trim().isEmpty) {
-      _bytes = null;
+      _photo = null;
       return;
     }
-    if (_resolved.containsKey(url)) {
-      _bytes = _resolved[url];
-      return;
-    }
-    _bytes = null;
-    _cache.putIfAbsent(url, () async {
-      try {
-        final http.Response res = await _httpClient
-            .get(Uri.parse(url))
-            .timeout(const Duration(seconds: 15));
-        final Uint8List? bytes = res.statusCode == 200 ? res.bodyBytes : null;
-        _resolved[url] = bytes;
-        return bytes;
-      } catch (_) {
-        _resolved[url] = null;
-        return null;
-      }
-    }).then((Uint8List? bytes) {
+    _photo = null;
+    PlayerPhotoPrecache.resolve(url).then((PortraitPhoto? photo) {
       if (!mounted || widget.photoUrl != url) return;
-      setState(() => _bytes = bytes);
+      setState(() => _photo = photo);
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final Uint8List? bytes = _bytes;
+    final PortraitPhoto? photo = _photo;
     return Container(
       width: widget.size,
       height: widget.size,
@@ -407,18 +388,45 @@ class _StaffAvatarState extends State<_StaffAvatar> {
         border: Border.all(color: CbbcColors.slate200),
       ),
       clipBehavior: Clip.antiAlias,
-      child: bytes == null
+      child: photo == null
           ? Icon(
               Icons.person_rounded,
               size: widget.size * 0.62,
               color: CbbcColors.blueDeep,
             )
-          : Image.memory(
-              bytes,
-              fit: BoxFit.cover,
-              alignment: Alignment.topCenter,
-              gaplessPlayback: true,
+          : CustomPaint(
+              painter: _StaffAvatarPainter(photo),
+              child: const SizedBox.expand(),
             ),
     );
   }
+}
+
+class _StaffAvatarPainter extends CustomPainter {
+  const _StaffAvatarPainter(this.photo);
+
+  final PortraitPhoto photo;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    // O recorte das atletas é retrato (rosto + ombros + camiseta). Para o
+    // círculo 1:1, usa o quadrado do topo desse recorte: mesma largura
+    // (centrada no rosto) e altura igual — rosto e começo dos ombros.
+    final Rect r = photo.sourceRect;
+    final double side = math.min(r.width, r.height);
+    final Rect src = Rect.fromLTWH(
+      r.left + (r.width - side) / 2,
+      r.top,
+      side,
+      side,
+    );
+    final Paint paint = Paint()
+      ..isAntiAlias = true
+      ..filterQuality = FilterQuality.high;
+    canvas.drawImageRect(photo.image, src, Offset.zero & size, paint);
+  }
+
+  @override
+  bool shouldRepaint(_StaffAvatarPainter oldDelegate) =>
+      oldDelegate.photo != photo;
 }

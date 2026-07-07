@@ -11,4 +11,4 @@
 /// 2. Decida se a mudança é MAJOR, MINOR ou PATCH.
 /// 3. Atualize [kAppVersion] aqui **e** adicione a entrada correspondente
 ///    no topo do `CHANGELOG.md` antes (ou junto) do commit.
-const String kAppVersion = '2.5.0';
+const String kAppVersion = '2.5.1';

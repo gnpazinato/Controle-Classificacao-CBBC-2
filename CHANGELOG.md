@@ -24,6 +24,13 @@ link."
 
 ---
 
+## 2.5.1 — 2026-07-07
+
+- **Foto da comissão técnica cortada como a das atletas.** O avatar
+  redondo do viewer agora usa o mesmo detector de rosto dos chips da
+  quadra (recorte "rosto + ombros"), eliminando a faixa de fundo vazia
+  que sobrava acima da cabeça em fotos tiradas de longe.
+
 ## 2.5.0 — 2026-07-07
 
 - **Link de transmissão fixo por tablet.** O link da quadra deixa de ser
