@@ -8,9 +8,12 @@ enum TemplateKind { singleSheet, perTeam }
 /// ponto de partida.
 ///
 /// Layout único exigido pelo CBBC: `clube`, `classe`, `atleta`, `camisa`,
-/// `data de nascimento`, `gênero`, `foto`. O modelo "aba única" usa a aba
-/// `Atletas` com todas as colunas. O modelo "uma aba por clube" omite a
-/// coluna `clube` (vem do nome da aba).
+/// `data de nascimento`, `gênero`, `função`, `foto`. O modelo "aba única"
+/// usa a aba `Atletas` com todas as colunas. O modelo "uma aba por clube"
+/// omite a coluna `clube` (vem do nome da aba). A coluna `função`
+/// diferencia atletas da comissão técnica: qualquer texto diferente de
+/// "atleta" (ex.: "Técnico") marca a linha como comissão, exigindo só o
+/// nome.
 ///
 /// **Dados anônimos**: o exemplo dentro do template usa nomes genéricos
 /// (`Equipe A/B/...`, `Atleta 1/2/...`) pra que o usuário não confunda o
@@ -31,6 +34,7 @@ class TemplateGeneratorService {
     'camisa',
     'data de nascimento',
     'genero',
+    'função',
     'foto',
   ];
 
@@ -40,6 +44,7 @@ class TemplateGeneratorService {
     'camisa',
     'data de nascimento',
     'genero',
+    'função',
     'foto',
   ];
 
@@ -53,6 +58,7 @@ class TemplateGeneratorService {
     10, // camisa
     22, // data de nascimento
     10, // genero
+    16, // função
     42, // foto
   ];
 
@@ -62,7 +68,16 @@ class TemplateGeneratorService {
     10, // camisa
     22, // data de nascimento
     10, // genero
+    16, // função
     42, // foto
+  ];
+
+  /// Exemplos de comissão técnica — linhas só com nome + função. O
+  /// parser identifica pelo texto da coluna `função` (≠ "atleta") e não
+  /// exige classe/camisa/nascimento.
+  static const List<List<String>> _sampleStaff = <List<String>>[
+    <String>['Nome do técnico', 'Técnico'],
+    <String>['Nome do auxiliar', 'Auxiliar técnico'],
   ];
 
   static const String singleSheetTabName = 'Atletas';
@@ -131,7 +146,12 @@ class TemplateGeneratorService {
           .map((String h) => xlsx.TextCellValue(h))
           .toList(growable: false),
     );
+    String? currentClub;
     for (final _SampleRow row in _expandSampleRows()) {
+      if (currentClub != null && currentClub != row.club) {
+        _appendStaffRows(excel, singleSheetTabName, club: currentClub);
+      }
+      currentClub = row.club;
       excel.appendRow(singleSheetTabName, <xlsx.CellValue?>[
         xlsx.TextCellValue(row.club),
         xlsx.TextCellValue(_formatPlayerClass(row.playerClass)),
@@ -139,11 +159,33 @@ class TemplateGeneratorService {
         xlsx.IntCellValue(row.shirt),
         xlsx.TextCellValue(_formatDob(row.dob)),
         xlsx.TextCellValue(row.gender),
+        xlsx.TextCellValue('Atleta'),
         xlsx.TextCellValue(''),
       ]);
     }
+    if (currentClub != null) {
+      _appendStaffRows(excel, singleSheetTabName, club: currentClub);
+    }
     _applyColumnWidths(excel, singleSheetTabName, _singleSheetWidths);
     return _encode(excel);
+  }
+
+  /// Linhas de exemplo da comissão técnica (nome + função; demais
+  /// colunas vazias). Com [club] nulo, omite a coluna do clube (modelo
+  /// "uma aba por clube").
+  void _appendStaffRows(xlsx.Excel excel, String sheetName, {String? club}) {
+    for (final List<String> staff in _sampleStaff) {
+      excel.appendRow(sheetName, <xlsx.CellValue?>[
+        if (club != null) xlsx.TextCellValue(club),
+        xlsx.TextCellValue(''),
+        xlsx.TextCellValue(staff[0]),
+        xlsx.TextCellValue(''),
+        xlsx.TextCellValue(''),
+        xlsx.TextCellValue(''),
+        xlsx.TextCellValue(staff[1]),
+        xlsx.TextCellValue(''),
+      ]);
+    }
   }
 
   Uint8List _buildPerTeam() {
@@ -181,9 +223,11 @@ class TemplateGeneratorService {
           xlsx.IntCellValue(row.shirt),
           xlsx.TextCellValue(_formatDob(row.dob)),
           xlsx.TextCellValue(row.gender),
+          xlsx.TextCellValue('Atleta'),
           xlsx.TextCellValue(''),
         ]);
       }
+      _appendStaffRows(excel, club);
       _applyColumnWidths(excel, club, _perTeamWidths);
     }
 

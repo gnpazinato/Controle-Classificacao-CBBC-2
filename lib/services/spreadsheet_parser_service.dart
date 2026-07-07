@@ -4,6 +4,7 @@ import 'package:excel/excel.dart' as xlsx;
 
 import '../constants/player_classes.dart';
 import '../models/player.dart';
+import '../models/staff_member.dart';
 import '../models/team.dart';
 import 'column_mapping.dart';
 import 'import_result.dart';
@@ -208,6 +209,15 @@ class SpreadsheetParserService {
         clubId,
         () => _ClubBucket(id: clubId, name: clubName),
       );
+      if (_collectStaffRow(
+        row: row,
+        header: header,
+        clubId: clubId,
+        clubName: clubName,
+        bucket: bucket,
+      )) {
+        continue;
+      }
       final Player? player = _buildPlayer(
         row: row,
         header: header,
@@ -220,10 +230,8 @@ class SpreadsheetParserService {
       if (player != null) bucket.players.add(player);
     }
 
-    final List<Team> teams = buckets.values
-        .map((_ClubBucket b) =>
-            Team(id: b.id, clubName: b.name, players: b.players))
-        .toList();
+    final List<Team> teams =
+        buckets.values.map((_ClubBucket b) => b.toTeam()).toList();
 
     _detectDuplicateShirtNumbers(teams, issues, sheet.name);
 
@@ -281,6 +289,15 @@ class SpreadsheetParserService {
         competitionName ??=
             _readOptionalString(row, header.fieldIndex['competition']);
 
+        if (_collectStaffRow(
+          row: row,
+          header: header,
+          clubId: clubId,
+          clubName: clubName,
+          bucket: bucket,
+        )) {
+          continue;
+        }
         final Player? player = _buildPlayer(
           row: row,
           header: header,
@@ -293,12 +310,8 @@ class SpreadsheetParserService {
         if (player != null) bucket.players.add(player);
       }
 
-      if (bucket.players.isNotEmpty) {
-        teams.add(Team(
-          id: bucket.id,
-          clubName: bucket.name,
-          players: bucket.players,
-        ));
+      if (bucket.players.isNotEmpty || bucket.staff.isNotEmpty) {
+        teams.add(bucket.toTeam());
       }
     }
 
@@ -363,15 +376,14 @@ class SpreadsheetParserService {
           () => _ClubBucket(id: t.id, name: t.clubName),
         );
         bucket.players.addAll(t.players);
+        bucket.staff.addAll(t.staff);
       }
       issues.addAll(multi.issues);
       competitionName ??= multi.competitionName;
     }
 
-    final List<Team> teams = buckets.values
-        .map((_ClubBucket b) =>
-            Team(id: b.id, clubName: b.name, players: b.players))
-        .toList();
+    final List<Team> teams =
+        buckets.values.map((_ClubBucket b) => b.toTeam()).toList();
 
     _detectDuplicateShirtNumbers(teams, issues, null);
 
@@ -442,6 +454,15 @@ class SpreadsheetParserService {
         clubId,
         () => _ClubBucket(id: clubId, name: clubName),
       );
+      if (_collectStaffRow(
+        row: row,
+        header: currentHeader,
+        clubId: clubId,
+        clubName: clubName,
+        bucket: bucket,
+      )) {
+        continue;
+      }
       final Player? player = _buildPlayer(
         row: row,
         header: currentHeader,
@@ -511,6 +532,39 @@ class SpreadsheetParserService {
   }
 
   // -------- helpers --------
+
+  /// Se a linha tiver coluna `função` com valor de comissão técnica
+  /// (qualquer texto que não seja "atleta"/"jogador(a)"), registra um
+  /// [StaffMember] no bucket e retorna `true` — a linha não passa pela
+  /// validação de atleta (camisa/classe/nascimento não são exigidos).
+  bool _collectStaffRow({
+    required List<String?> row,
+    required _HeaderInfo header,
+    required String clubId,
+    required String clubName,
+    required _ClubBucket bucket,
+  }) {
+    final String? roleRaw =
+        _readOptionalString(row, header.fieldIndex['role']);
+    if (!isStaffRole(roleRaw)) return false;
+
+    final String name =
+        (_readOptionalString(row, header.fieldIndex['name']) ?? '').trim();
+    // Linha marcada como comissão mas sem nome: ignora silenciosamente
+    // (costuma ser sobra de formatação).
+    if (name.isEmpty) return true;
+
+    final String? photoRaw =
+        _readOptionalString(row, header.fieldIndex['photo']);
+    bucket.staff.add(StaffMember(
+      id: '$clubId::staff::${normalizeHeaderToken(name)}',
+      clubName: clubName,
+      fullName: name,
+      role: roleRaw!.trim(),
+      photoUrl: normalizePlayerPhotoUrl(photoRaw),
+    ));
+    return true;
+  }
 
   Player? _buildPlayer({
     required List<String?> row,
@@ -836,4 +890,7 @@ class _ClubBucket {
   final String id;
   final String name;
   final List<Player> players = <Player>[];
+  final List<StaffMember> staff = <StaffMember>[];
+
+  Team toTeam() => Team(id: id, clubName: name, players: players, staff: staff);
 }

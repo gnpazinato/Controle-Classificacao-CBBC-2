@@ -4,6 +4,17 @@ set -euo pipefail
 FLUTTER_VERSION="${FLUTTER_VERSION:-3.32.0}"
 FLUTTER_HOME="${FLUTTER_HOME:-$HOME/flutter}"
 
+# Em imagens Alpine (musl), o Dart SDK (glibc) só executa com a camada
+# de compatibilidade gcompat — sem ela, `flutter` falha com
+# "cannot execute: required file not found".
+# Mesmo com gcompat, testes de widget que montam MaterialApp podem
+# estourar a pilha (thread musl é pequena e o VM do Dart herda o limite).
+# O suite completo roda no CI (ubuntu), que é o ambiente de referência.
+if [ -f /etc/alpine-release ]; then
+  echo "Alpine detectado — instalando gcompat/libstdc++ pro Dart SDK..."
+  sudo apk add --no-cache gcompat libstdc++
+fi
+
 if [ ! -d "$FLUTTER_HOME" ]; then
   echo "Baixando Flutter $FLUTTER_VERSION..."
   curl -fSL -o /tmp/flutter.tar.xz \

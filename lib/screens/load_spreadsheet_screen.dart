@@ -7,6 +7,7 @@ import '../constants/app_version.dart';
 import '../models/match_state.dart';
 import '../services/cache_service.dart';
 import '../services/import_result.dart';
+import '../services/link_import_service.dart';
 import '../services/pdf_parser_service.dart';
 import '../services/spreadsheet_parser_service.dart';
 import '../services/template_generator_service.dart';
@@ -38,12 +39,14 @@ class LoadSpreadsheetScreen extends StatefulWidget {
     FilePickerFn? filePicker,
     TemplateGeneratorService? templates,
     TemplateSaveFn? saveTemplate,
+    LinkImportService? linkImporter,
   })  : _xlsxParser = xlsxParser,
         _pdfParser = pdfParser,
         _cache = cache,
         _filePicker = filePicker,
         _templates = templates,
-        _saveTemplate = saveTemplate;
+        _saveTemplate = saveTemplate,
+        _linkImporter = linkImporter;
 
   final SpreadsheetParserService? _xlsxParser;
   final PdfParserService? _pdfParser;
@@ -51,6 +54,7 @@ class LoadSpreadsheetScreen extends StatefulWidget {
   final FilePickerFn? _filePicker;
   final TemplateGeneratorService? _templates;
   final TemplateSaveFn? _saveTemplate;
+  final LinkImportService? _linkImporter;
 
   @override
   State<LoadSpreadsheetScreen> createState() => _LoadSpreadsheetScreenState();
@@ -63,9 +67,15 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
   late final FilePickerFn _pickFile;
   late final TemplateGeneratorService _templates;
   late final TemplateSaveFn _saveTemplate;
+  late final LinkImportService _linkImporter;
 
   bool _busy = false;
+  String? _busyLabel;
   bool _hasPromptedRestore = false;
+
+  /// Último link importado — carregado do cache e mantido preenchido no
+  /// diálogo mesmo depois de fechar o app ou reiniciar o tablet.
+  String? _lastImportLink;
 
   @override
   void initState() {
@@ -76,6 +86,10 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
     _pickFile = widget._filePicker ?? _defaultFilePicker;
     _templates = widget._templates ?? const TemplateGeneratorService();
     _saveTemplate = widget._saveTemplate ?? platform_saver.defaultSaveTemplate;
+    _linkImporter = widget._linkImporter ?? LinkImportService();
+    _cache.loadLastImportLink().then((String? link) {
+      if (mounted && link != null) setState(() => _lastImportLink = link);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferRestore());
   }
 
@@ -151,25 +165,72 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
         result = _xlsxParser.parseBytes(picked.bytes);
       }
       if (!mounted) return;
-      if (result.hasBlockingIssues && result.teams.isEmpty) {
-        await Navigator.of(context).push<void>(
-          MaterialPageRoute<void>(
-            builder: (_) => MissingDataScreen(result: result),
-          ),
-        );
-        return;
+      await _showImportResult(result);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _busyLabel = null;
+        });
       }
+    }
+  }
+
+  Future<void> _onImportFromLinkPressed() async {
+    if (_busy) return;
+    final String? url = await showDialog<String>(
+      context: context,
+      builder: (BuildContext ctx) =>
+          _LinkInputDialog(initialLink: _lastImportLink),
+    );
+    if (url == null || url.trim().isEmpty || !mounted) return;
+
+    // Persiste o link usado — fica preenchido nas próximas aberturas,
+    // mesmo depois de fechar o app ou reiniciar o tablet.
+    _lastImportLink = url.trim();
+    await _cache.saveLastImportLink(url);
+    if (!mounted) return;
+
+    setState(() {
+      _busy = true;
+      _busyLabel = 'Conectando…';
+    });
+    try {
+      final ImportResult result = await _linkImporter.importFromLink(
+        url,
+        onProgress: (String stage) {
+          if (mounted) setState(() => _busyLabel = stage);
+        },
+      );
+      if (!mounted) return;
+      await _showImportResult(result);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _busyLabel = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _showImportResult(ImportResult result) async {
+    if (result.hasBlockingIssues && result.teams.isEmpty) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (_) => ValidationSummaryScreen(
-            result: result,
-            cache: _cache,
-          ),
+          builder: (_) => MissingDataScreen(result: result),
         ),
       );
-    } finally {
-      if (mounted) setState(() => _busy = false);
+      return;
     }
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute<void>(
+        builder: (_) => ValidationSummaryScreen(
+          result: result,
+          cache: _cache,
+        ),
+      ),
+    );
   }
 
   Future<void> _onDownloadTemplatePressed(TemplateKind kind) async {
@@ -219,6 +280,11 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
                 onTap: _busy ? null : _onLoadPressed,
               ),
               const SizedBox(height: 14),
+              _LinkImportCard(
+                busy: _busy,
+                onTap: _busy ? null : _onImportFromLinkPressed,
+              ),
+              const SizedBox(height: 14),
               _TemplatesCard(
                 busy: _busy,
                 onSingleSheet: () =>
@@ -229,6 +295,17 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
               if (_busy) ...<Widget>[
                 const SizedBox(height: 12),
                 const LinearProgressIndicator(),
+                if (_busyLabel != null) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Text(
+                    _busyLabel!,
+                    key: const Key('link-import-progress'),
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: CbbcColors.textSecondary,
+                        ),
+                  ),
+                ],
               ],
             ],
           ),
@@ -329,6 +406,170 @@ class _UploadCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LinkImportCard extends StatelessWidget {
+  const _LinkImportCard({required this.busy, required this.onTap});
+
+  final bool busy;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: CbbcColors.orange.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: const Key('import-from-link-button'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: busy
+                  ? CbbcColors.slate200
+                  : CbbcColors.orange.withValues(alpha: 0.45),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  color: CbbcColors.surface,
+                  shape: BoxShape.circle,
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.link,
+                  size: 26,
+                  color: CbbcColors.orange,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    const Text(
+                      'Importar por link (Drive/OneDrive)',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: CbbcColors.blueDeep,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Link de planilha ou de pasta com a planilha e as '
+                      'fotos das equipes.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: CbbcColors.textSecondary,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Diálogo que recebe o link público do Google Drive/OneDrive. Abre já
+/// preenchido com o último link importado, quando houver.
+class _LinkInputDialog extends StatefulWidget {
+  const _LinkInputDialog({this.initialLink});
+
+  final String? initialLink;
+
+  @override
+  State<_LinkInputDialog> createState() => _LinkInputDialogState();
+}
+
+class _LinkInputDialogState extends State<_LinkInputDialog> {
+  late final TextEditingController _controller;
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialLink ?? '');
+    _hasText = _controller.text.trim().isNotEmpty;
+    _controller.addListener(() {
+      final bool next = _controller.text.trim().isNotEmpty;
+      if (next != _hasText) setState(() => _hasText = next);
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Importar por link'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          TextField(
+            key: const Key('link-input-field'),
+            controller: _controller,
+            autofocus: true,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'Link do Google Drive ou OneDrive',
+              hintText: 'https://drive.google.com/…',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (String value) =>
+                Navigator.of(context).pop(value.trim()),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Planilha: os dados são importados direto.\n'
+            'Pasta: a planilha fica na raiz e cada equipe tem uma '
+            'subpasta com as fotos — o nome do arquivo deve ser o nome '
+            '(ou primeiro nome) da pessoa.\n'
+            'O compartilhamento precisa estar como "qualquer pessoa com '
+            'o link".',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: CbbcColors.textSecondary,
+                ),
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          key: const Key('link-import-confirm'),
+          onPressed: _hasText
+              ? () => Navigator.of(context).pop(_controller.text.trim())
+              : null,
+          child: const Text('Importar'),
+        ),
+      ],
     );
   }
 }

@@ -14,6 +14,8 @@ enum ImportIssueCategory {
   missingPlayerClass,
   missingDateOfBirth,
   duplicateShirtNumber,
+  linkUnreachable,
+  photoMatching,
 }
 
 class ImportIssue {
@@ -81,5 +83,29 @@ class ImportResult {
       total += t.players.length;
     }
     return total;
+  }
+
+  int get staffCount {
+    int total = 0;
+    for (final Team t in teams) {
+      total += t.staff.length;
+    }
+    return total;
+  }
+
+  /// Cópia com times substituídos (usada pela importação por link para
+  /// anexar fotos casadas da pasta sem tocar nos issues do parser).
+  ImportResult copyWith({
+    List<Team>? teams,
+    List<ImportIssue>? issues,
+    String? competitionName,
+    DateTime? competitionEndDate,
+  }) {
+    return ImportResult(
+      teams: teams ?? this.teams,
+      issues: issues ?? this.issues,
+      competitionName: competitionName ?? this.competitionName,
+      competitionEndDate: competitionEndDate ?? this.competitionEndDate,
+    );
   }
 }

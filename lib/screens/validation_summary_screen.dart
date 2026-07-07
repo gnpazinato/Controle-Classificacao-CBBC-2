@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../constants/player_classes.dart';
 import '../models/player.dart';
+import '../models/staff_member.dart';
 import '../models/team.dart';
 import '../services/cache_service.dart';
 import '../services/import_result.dart';
@@ -261,7 +262,10 @@ class _ValidationSummaryScreenState extends State<ValidationSummaryScreen> {
               style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             subtitle: Text(
-              '${team.players.length} atleta(s)',
+              team.staff.isEmpty
+                  ? '${team.players.length} atleta(s)'
+                  : '${team.players.length} atleta(s) · '
+                      '${team.staff.length} na comissão técnica',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             trailing: Row(
@@ -292,7 +296,7 @@ class _ValidationSummaryScreenState extends State<ValidationSummaryScreen> {
   }
 
   List<Widget> _playerRows(Team team) {
-    if (team.players.isEmpty) {
+    if (team.players.isEmpty && team.staff.isEmpty) {
       return const <Widget>[
         Padding(
           padding: EdgeInsets.all(12),
@@ -304,17 +308,39 @@ class _ValidationSummaryScreenState extends State<ValidationSummaryScreen> {
       ..sort((Player a, Player b) => a.shirtNumber.compareTo(b.shirtNumber));
     return <Widget>[
       const Divider(height: 1),
-      const _PlayerRowHeader(),
-      const Divider(height: 1),
-      for (final Player p in sorted)
-        _EditablePlayerRow(
-          key: ValueKey<String>('player-row-${p.id}'),
-          player: p,
-          siblings: team.players,
-          onChanged: (Player updated) => _updatePlayer(team, updated),
-          onDelete: () => _confirmAndDeletePlayer(team, p),
-        ),
+      if (sorted.isNotEmpty) ...<Widget>[
+        const _PlayerRowHeader(),
+        const Divider(height: 1),
+        for (final Player p in sorted)
+          _EditablePlayerRow(
+            key: ValueKey<String>('player-row-${p.id}'),
+            player: p,
+            siblings: team.players,
+            onChanged: (Player updated) => _updatePlayer(team, updated),
+            onDelete: () => _confirmAndDeletePlayer(team, p),
+          ),
+      ],
+      // Comissão técnica no fim da lista: só nome + função, sem os
+      // campos de atleta (classe, nascimento, camisa...).
+      if (team.staff.isNotEmpty) ...<Widget>[
+        const Divider(height: 1),
+        const _StaffSectionLabel(),
+        for (final StaffMember s in team.staff)
+          _StaffRow(
+            key: ValueKey<String>('staff-row-${s.id}'),
+            member: s,
+            onChanged: (StaffMember updated) => _updateStaff(team, updated),
+          ),
+        const SizedBox(height: 8),
+      ],
     ];
+  }
+
+  void _updateStaff(Team team, StaffMember updated) {
+    final List<StaffMember> next = team.staff
+        .map((StaffMember s) => s.id == updated.id ? updated : s)
+        .toList(growable: false);
+    _replaceTeam(team.copyWith(staff: next));
   }
 
   Future<void> _openMissingData(BuildContext context) async {
@@ -343,6 +369,132 @@ String _formatDob(DateTime? dob) {
   final String day = dob.day.toString().padLeft(2, '0');
   final String month = dob.month.toString().padLeft(2, '0');
   return '$day/$month/${dob.year}';
+}
+
+class _StaffSectionLabel extends StatelessWidget {
+  const _StaffSectionLabel();
+
+  @override
+  Widget build(BuildContext context) {
+    final TextStyle? style = Theme.of(context)
+        .textTheme
+        .labelSmall
+        ?.copyWith(color: CbbcColors.textSecondary, letterSpacing: 0.5);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 2),
+      child: Row(
+        children: <Widget>[
+          const Icon(Icons.badge_outlined,
+              size: 14, color: CbbcColors.textSecondary),
+          const SizedBox(width: 6),
+          Text('COMISSÃO TÉCNICA', style: style),
+        ],
+      ),
+    );
+  }
+}
+
+/// Linha da comissão técnica no mesmo padrão visual das linhas de
+/// atleta: um retângulo com o nome ocupando o espaço restante e um
+/// retângulo com a função encostado na lateral direita.
+class _StaffRow extends StatefulWidget {
+  const _StaffRow({super.key, required this.member, required this.onChanged});
+
+  final StaffMember member;
+  final ValueChanged<StaffMember> onChanged;
+
+  @override
+  State<_StaffRow> createState() => _StaffRowState();
+}
+
+class _StaffRowState extends State<_StaffRow> {
+  static const double _kRoleFieldWidth = 150;
+
+  late TextEditingController _nameCtrl;
+  late TextEditingController _roleCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.member.fullName);
+    _roleCtrl = TextEditingController(text: widget.member.role);
+  }
+
+  @override
+  void didUpdateWidget(_StaffRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_nameCtrl.text != widget.member.fullName) {
+      _nameCtrl.text = widget.member.fullName;
+    }
+    if (_roleCtrl.text != widget.member.role) {
+      _roleCtrl.text = widget.member.role;
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _roleCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onNameChanged(String raw) {
+    final String trimmed = raw.trim();
+    if (trimmed.isEmpty || trimmed == widget.member.fullName) return;
+    widget.onChanged(widget.member.copyWith(fullName: trimmed));
+  }
+
+  void _onRoleChanged(String raw) {
+    final String trimmed = raw.trim();
+    if (trimmed.isEmpty || trimmed == widget.member.role) return;
+    widget.onChanged(widget.member.copyWith(role: trimmed));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: <Widget>[
+          Expanded(
+            child: TextField(
+              key: Key('staff-name-input-${widget.member.id}'),
+              controller: _nameCtrl,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: _onNameChanged,
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: _kRoleFieldWidth,
+            child: TextField(
+              key: Key('staff-role-input-${widget.member.id}'),
+              controller: _roleCtrl,
+              textAlign: TextAlign.center,
+              decoration: const InputDecoration(
+                isDense: true,
+                contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 10),
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: CbbcColors.blueDeep,
+              ),
+              onChanged: _onRoleChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _PlayerRowHeader extends StatelessWidget {

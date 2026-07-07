@@ -20,15 +20,30 @@ Brasileira de Basquetebol em Cadeira de Rodas). UI 100% pt-BR.
   (PDF texto-extraível via `syncfusion_flutter_pdf`). Os dois usam
   `canonicalField` de `lib/services/column_mapping.dart` para
   mapear cabeçalhos pt-BR/EN → campo canônico.
+- **Comissão técnica**: coluna `função` (`funcao`/`cargo`/`role`) na
+  planilha. Valor ≠ "atleta" vira `StaffMember` (só nome obrigatório),
+  guardado em `Team.staff`. Aparece no resumo da importação (nome ……
+  função), nunca em quadra.
+- **Importação por link**: `LinkImportService`
+  (`lib/services/link_import_service.dart`) aceita link público de
+  planilha OU pasta (Google Drive via `embeddedfolderview`, sem chave de
+  API; OneDrive pessoal via `api.onedrive.com/v1.0/shares/u!<token>`).
+  Em pasta: planilha na raiz + subpasta de fotos por equipe; fotos
+  casadas por nome de arquivo em `roster_photo_matcher.dart`.
 - **Cores**: `CbbcColors` em `lib/theme/cbbc_theme.dart`. Azul cobalto
   primário, laranja basquete secundário.
 
 ## Build local / Codespaces
 
-- `.devcontainer/post-create.sh` baixa Flutter 3.24.5 e roda
+- `.devcontainer/post-create.sh` baixa Flutter 3.32.0 e roda
   `flutter create .` pra gerar arquivos Android/Web faltantes.
 - Local: `flutter pub get && flutter analyze && flutter test &&
   flutter run -d web-server --web-port 8080`.
+- **Codespace Alpine (musl)**: o post-create instala `gcompat` pro Dart
+  rodar. Limitação conhecida: testes de widget que montam `MaterialApp`
+  podem estourar a pilha nesse ambiente (thread musl pequena) — o
+  smoke_test falha localmente mesmo em árvore limpa. O suite completo é
+  validado no CI (ubuntu).
 
 ## CI
 
@@ -58,8 +73,8 @@ internet quando houver link.").
 
 ## Estado
 
-- v0.2.0 — segunda rodada de ajustes (templates anônimos, edição no
-  resumo, cores de camiseta, indicador de bonificação, rotação livre,
-  ícone CBBC, AppBar reposicionada).
-- v0.1.0 — primeira release CBBC. Sem testes herdados do IWBF (deletados
-  na migração — só `test/smoke_test.dart` valida render + bonus rules).
+- Histórico completo no `CHANGELOG.md` (fonte da verdade de versões).
+- v2.4.x — importação por link do Drive/OneDrive (planilha ou pasta com
+  fotos por equipe, último link persistido) + comissão técnica via
+  coluna `função`.
+- v0.1.0 — primeira release CBBC, migrada do IWBF Team Points Control.

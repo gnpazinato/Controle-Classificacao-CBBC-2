@@ -106,6 +106,10 @@ class _CategoryBlock extends StatelessWidget {
         return 'Arquivo não pôde ser lido';
       case ImportIssueCategory.emptyFile:
         return 'Arquivo vazio';
+      case ImportIssueCategory.linkUnreachable:
+        return 'Link não pôde ser acessado';
+      case ImportIssueCategory.photoMatching:
+        return 'Fotos da pasta';
       case ImportIssueCategory.duplicateShirtNumber:
         return 'Outros problemas';
     }
@@ -129,6 +133,12 @@ class _CategoryBlock extends StatelessWidget {
         return 'O arquivo não pôde ser interpretado como .xlsx ou PDF.';
       case ImportIssueCategory.emptyFile:
         return 'O arquivo não tem linhas de dados.';
+      case ImportIssueCategory.linkUnreachable:
+        return 'Confira a internet e se o link do Drive/OneDrive está '
+            'compartilhado como "qualquer pessoa com o link".';
+      case ImportIssueCategory.photoMatching:
+        return 'Renomeie os arquivos de foto com o nome (ou primeiro '
+            'nome) de cada pessoa e importe novamente.';
       case ImportIssueCategory.duplicateShirtNumber:
         return '';
     }
