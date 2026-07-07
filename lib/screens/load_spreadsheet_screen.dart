@@ -464,7 +464,7 @@ class _LinkImportCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     const Text(
-                      'Importar por link (Drive/OneDrive)',
+                      'Importar por link (Google Drive ou OneDrive)',
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.w700,

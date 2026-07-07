@@ -24,6 +24,31 @@ link."
 
 ---
 
+## 2.5.0 — 2026-07-07
+
+- **Link de transmissão fixo por tablet.** O link da quadra deixa de ser
+  por partida: é criado uma vez, fica salvo no tablet e é retomado
+  automaticamente em toda partida nova (trocar equipes, voltar, fechar o
+  app ou reiniciar o tablet não muda o link). Só é gerado um código novo
+  se a transmissão ficar 24 horas sem uso (fim da competição) ou se o
+  usuário tocar em "Encerrar". Até 3 tablets/quadras podem transmitir ao
+  mesmo tempo (o servidor aceita 6 sessões, com margem pra links antigos
+  ainda não expirados). ⚠️ Exige redeploy das Functions no Cloudflare
+  Pages (o TTL de 24h vive em `functions/api/session.js`).
+- **Página pública completa.** O link agora mostra, além da quadra ao
+  vivo: o cabeçalho com placar da classificação, a relação completa de
+  atletas das duas equipes nas laterais (com quem está em quadra
+  destacado, igual à tela do tablet) e a **comissão técnica** de cada
+  equipe embaixo da relação — foto redonda (quando houver), nome e
+  função. Nenhum botão operacional aparece. Em telas estreitas
+  (celular em pé) o conteúdo vira uma coluna rolável. A tela do tablet
+  segue sem a comissão técnica.
+- **Heartbeat da transmissão corrigido.** O reenvio periódico agora
+  reutiliza o último estado enviado, mantendo a sessão viva no servidor
+  mesmo sem toques na quadra.
+- **Texto da home.** Botão renomeado para "Importar por link (Google
+  Drive ou OneDrive)".
+
 ## 2.4.1 — 2026-07-07
 
 - **Comissão técnica no padrão visual da lista.** No resumo da

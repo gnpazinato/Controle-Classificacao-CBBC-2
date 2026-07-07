@@ -1,13 +1,19 @@
 // POST /api/session — cria uma sessão de transmissão e devolve {id, write_token}.
 //
 // Regras:
-// - máximo de 3 sessões ativas simultâneas (3 quadras);
-// - sessões sem atividade há mais de 1h são removidas antes da contagem;
+// - o link é **por tablet**: o app guarda {id, write_token} e reutiliza a
+//   mesma sessão em todas as partidas, então este POST só roda quando o
+//   tablet ainda não tem sessão (ou quando a dele expirou);
+// - sessões sem atividade há mais de 24h são removidas antes da contagem —
+//   com jogos de manhã à noite, o mesmo link dura a semana inteira da
+//   competição e só expira quando ela termina;
+// - máximo de 6 sessões ativas: 3 quadras simultâneas + margem para
+//   sessões de tablets trocados/reinstalados que ainda não expiraram;
 // - id = código de 5 caracteres legível (sem 0/o/1/l/i pra evitar confusão).
 
 const ALPHABET = '23456789abcdefghjkmnpqrstuvwxyz';
-const MAX_SESSIONS = 3;
-const TTL_MS = 60 * 60 * 1000; // 1 hora
+const MAX_SESSIONS = 6;
+const TTL_MS = 24 * 60 * 60 * 1000; // 24 horas
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',

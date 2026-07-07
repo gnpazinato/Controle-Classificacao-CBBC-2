@@ -7,15 +7,15 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../constants/point_limits.dart';
 import '../models/match_state.dart';
 import '../models/player.dart';
-import '../models/team.dart';
 import '../services/broadcast_service.dart';
 import '../services/cache_service.dart';
 import '../services/vibration_service.dart';
 import '../theme/cbbc_theme.dart';
 import '../widgets/cbbc_logo_header.dart';
 import '../widgets/court_view.dart';
-import '../widgets/player_jersey_icon.dart';
+import '../widgets/match_header.dart';
 import '../widgets/player_portrait_chip.dart';
+import '../widgets/team_roster_list.dart';
 
 /// Tela principal da partida.
 class LineupControlScreen extends StatefulWidget {
@@ -58,6 +58,10 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     _wasOverA = _state.isTeamAOverLimit;
     _wasOverB = _state.isTeamBOverLimit;
     unawaited(_persist());
+    // Link fixo do tablet: se uma transmissão foi iniciada em partida
+    // anterior (e não expirou no servidor), retoma no mesmo código sem o
+    // usuário precisar tocar em nada.
+    unawaited(_resumeBroadcastIfSaved());
     // Aquece o cache de fotos das duas equipes em lotes de 6 paralelos
     // (fire-and-forget). A tela já aparece com silhuetas; conforme os
     // lotes chegam, as fotos populam o cache síncrono. Quando o usuário
@@ -114,9 +118,69 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
     }
   }
 
+  /// Tenta retomar em silêncio a sessão persistida do tablet ao entrar na
+  /// tela. Se o servidor não a reconhece mais (24h sem uso), descarta as
+  /// credenciais e avisa que um link novo precisa ser gerado.
+  Future<void> _resumeBroadcastIfSaved() async {
+    final ({String id, String writeToken})? saved =
+        await _cache.loadBroadcastSession();
+    if (saved == null || _broadcast.isLive) return;
+    final BroadcastResumeResult result = await _broadcast.resume(
+      sessionId: saved.id,
+      writeToken: saved.writeToken,
+      envelope: _broadcastEnvelope(),
+    );
+    if (!mounted) return;
+    switch (result) {
+      case BroadcastResumeResult.resumed:
+        setState(() => _broadcasting = true);
+      case BroadcastResumeResult.expired:
+        await _cache.clearBroadcastSession();
+        if (!mounted) return;
+        _showSnack(
+          'O link de transmissão deste tablet expirou. Toque no ícone de '
+          'transmissão para gerar um novo.',
+          duration: const Duration(seconds: 6),
+        );
+      case BroadcastResumeResult.offline:
+        // Sem internet agora; as credenciais ficam guardadas e o usuário
+        // pode tentar de novo pelo ícone de transmissão.
+        break;
+    }
+  }
+
   Future<void> _startBroadcast() async {
     try {
+      // Reutiliza a sessão persistida do tablet, se houver — o link só
+      // muda quando o servidor a expirou (24h sem uso) ou após "Encerrar".
+      final ({String id, String writeToken})? saved =
+          await _cache.loadBroadcastSession();
+      if (saved != null) {
+        final BroadcastResumeResult result = await _broadcast.resume(
+          sessionId: saved.id,
+          writeToken: saved.writeToken,
+          envelope: _broadcastEnvelope(),
+        );
+        if (result == BroadcastResumeResult.resumed) {
+          if (!mounted) return;
+          setState(() => _broadcasting = true);
+          _showBroadcastDialog();
+          return;
+        }
+        if (result == BroadcastResumeResult.offline) {
+          throw const BroadcastException(
+              'Sem conexão com a transmissão. Verifique a internet do '
+              'tablet e tente novamente.');
+        }
+        // Expirada: descarta e cria uma sessão nova logo abaixo.
+        await _cache.clearBroadcastSession();
+      }
       await _broadcast.start(_broadcastEnvelope());
+      final String? id = _broadcast.sessionId;
+      final String? token = _broadcast.writeToken;
+      if (id != null && token != null) {
+        await _cache.saveBroadcastSession(id: id, writeToken: token);
+      }
       if (!mounted) return;
       setState(() => _broadcasting = true);
       _showBroadcastDialog();
@@ -138,6 +202,9 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
 
   Future<void> _stopBroadcast() async {
     await _broadcast.stop();
+    // Encerrar é a ação de "fim de competição": o link deste tablet deixa
+    // de existir e o próximo início gera um código novo.
+    await _cache.clearBroadcastSession();
     if (!mounted) return;
     setState(() => _broadcasting = false);
   }
@@ -300,7 +367,7 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
         body: SafeArea(
           child: Column(
             children: <Widget>[
-              _Header(state: _state),
+              MatchHeader(state: _state),
               Expanded(
                 child: LayoutBuilder(
                   builder: (BuildContext _, BoxConstraints c) {
@@ -339,101 +406,6 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
 enum _Side { a, b }
 
 typedef _PlayerTapCallback = void Function(Player player, _Side side);
-
-class _Header extends StatelessWidget {
-  const _Header({required this.state});
-
-  final MatchState state;
-
-  @override
-  Widget build(BuildContext context) {
-    final TextStyle teamStyle = Theme.of(context)
-            .textTheme
-            .titleSmall
-            ?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: CbbcColors.blueDeep) ??
-        const TextStyle(fontWeight: FontWeight.w700);
-    final String? compName = state.competitionName;
-    // Em telas baixas (paisagem de celular pequeno), esconder o nome da
-    // competição pra liberar espaço vertical pro score + quadra.
-    final bool showComp = MediaQuery.of(context).size.height >= 520 &&
-        compName != null &&
-        compName.isNotEmpty;
-    return Material(
-      color: CbbcColors.surface,
-      child: Container(
-        decoration: const BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: CbbcColors.slate200, width: 1),
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[
-            if (showComp)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  compName,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: CbbcColors.textSecondary,
-                        fontWeight: FontWeight.w600,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-              ),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                Flexible(
-                  child: Text(
-                    state.teamA.displayName,
-                    style: teamStyle,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Text('  ×  ', style: teamStyle),
-                Flexible(
-                  child: Text(
-                    state.teamB.displayName,
-                    style: teamStyle,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: _ScoreCell(
-                    total: state.totalPointsTeamA,
-                    limit: state.effectiveLimitTeamA,
-                    isOver: state.isTeamAOverLimit,
-                    bonusActive: state.hasBonusInCourtTeamA,
-                    keyName: 'score-team-a',
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _ScoreCell(
-                    total: state.totalPointsTeamB,
-                    limit: state.effectiveLimitTeamB,
-                    isOver: state.isTeamBOverLimit,
-                    bonusActive: state.hasBonusInCourtTeamB,
-                    keyName: 'score-team-b',
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _PointLimitMenu extends StatelessWidget {
   const _PointLimitMenu({required this.current, required this.onChanged});
@@ -492,107 +464,6 @@ class _PointLimitMenu extends StatelessWidget {
   }
 }
 
-class _ScoreCell extends StatelessWidget {
-  const _ScoreCell({
-    required this.total,
-    required this.limit,
-    required this.isOver,
-    required this.bonusActive,
-    required this.keyName,
-  });
-
-  final double total;
-  final double limit;
-  final bool isOver;
-  final bool bonusActive;
-  final String keyName;
-
-  @override
-  Widget build(BuildContext context) {
-    final Color totalColor =
-        isOver ? CbbcColors.alertRed : CbbcColors.blueDeep;
-    return AnimatedContainer(
-      key: Key(keyName),
-      duration: const Duration(milliseconds: 180),
-      curve: Curves.easeOut,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: isOver ? CbbcColors.alertRedSurface : CbbcColors.slate50,
-        border: Border.all(
-          color: isOver ? CbbcColors.alertRed : CbbcColors.slate200,
-          width: isOver ? 1.6 : 1,
-        ),
-        borderRadius: BorderRadius.circular(10),
-        boxShadow: isOver
-            ? <BoxShadow>[
-                BoxShadow(
-                  color: CbbcColors.alertRed.withValues(alpha: 0.32),
-                  blurRadius: 12,
-                  spreadRadius: 1,
-                ),
-              ]
-            : null,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              Text(
-                total.toStringAsFixed(1),
-                style: TextStyle(
-                  color: totalColor,
-                  fontSize: 26,
-                  fontWeight: FontWeight.w900,
-                  height: 1.0,
-                  fontFeatures: const <FontFeature>[
-                    FontFeature.tabularFigures(),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 4),
-              Text(
-                '/ ${limit.toStringAsFixed(1)}',
-                style: const TextStyle(
-                  color: CbbcColors.textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: <FontFeature>[
-                    FontFeature.tabularFigures(),
-                  ],
-                ),
-              ),
-              if (bonusActive) ...<Widget>[
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.star,
-                  size: 16,
-                  color: CbbcColors.orange,
-                ),
-              ],
-            ],
-          ),
-          SizedBox(
-            height: 14,
-            child: isOver
-                ? const Text(
-                    'Limite excedido.',
-                    style: TextStyle(
-                      color: CbbcColors.alertRed,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 11,
-                    ),
-                  )
-                : null,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _TabletBody extends StatelessWidget {
   const _TabletBody({
     required this.state,
@@ -613,7 +484,7 @@ class _TabletBody extends StatelessWidget {
       children: <Widget>[
         Expanded(
           flex: 3,
-          child: _TeamPlayerList(
+          child: TeamRosterList(
             key: const Key('tablet-team-a-list'),
             state: state,
             team: state.teamA,
@@ -633,7 +504,7 @@ class _TabletBody extends StatelessWidget {
         ),
         Expanded(
           flex: 3,
-          child: _TeamPlayerList(
+          child: TeamRosterList(
             key: const Key('tablet-team-b-list'),
             state: state,
             team: state.teamB,
@@ -676,7 +547,7 @@ class _PhoneBody extends StatelessWidget {
           Expanded(
             child: TabBarView(
               children: <Widget>[
-                _TeamPlayerList(
+                TeamRosterList(
                   key: const Key('phone-team-a-list'),
                   state: state,
                   team: state.teamA,
@@ -690,7 +561,7 @@ class _PhoneBody extends StatelessWidget {
                   onCourtStyleChanged: onCourtStyleChanged,
                   onPlayerTap: onPlayerTap,
                 ),
-                _TeamPlayerList(
+                TeamRosterList(
                   key: const Key('phone-team-b-list'),
                   state: state,
                   team: state.teamB,
@@ -702,202 +573,6 @@ class _PhoneBody extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _TeamPlayerList extends StatelessWidget {
-  const _TeamPlayerList({
-    super.key,
-    required this.state,
-    required this.team,
-    required this.isTeamA,
-    required this.selectedIds,
-    required this.onPlayerTap,
-  });
-
-  final MatchState state;
-  final Team team;
-  final bool isTeamA;
-  final Set<String> selectedIds;
-  final ValueChanged<Player> onPlayerTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final List<Player> sortedPlayers = <Player>[...team.players]
-      ..sort((Player a, Player b) =>
-          a.shirtNumber.compareTo(b.shirtNumber));
-
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        const double headerHeight = 28;
-        final double listHeight = constraints.maxHeight - headerHeight;
-        final int playerCount = sortedPlayers.length;
-        final double rawSlotHeight = playerCount > 0
-            ? listHeight / playerCount
-            : 0;
-        final double slotHeight = rawSlotHeight.clamp(28.0, 56.0);
-
-        return Column(
-          mainAxisSize: MainAxisSize.max,
-          children: <Widget>[
-            SizedBox(
-              height: headerHeight,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                child: Center(
-                  child: Text(
-                    team.displayName,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-            ),
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                itemCount: sortedPlayers.length,
-                itemExtent: slotHeight,
-                itemBuilder: (BuildContext _, int i) {
-                  final Player p = sortedPlayers[i];
-                  return _PlayerCard(
-                    player: p,
-                    isTeamA: isTeamA,
-                    jerseyColor:
-                        isTeamA ? state.teamAJerseyColor : state.teamBJerseyColor,
-                    isBonusEligible: state.qualifiesForBonus(p),
-                    selected: selectedIds.contains(p.id),
-                    height: slotHeight,
-                    onTap: () => onPlayerTap(p),
-                  );
-                },
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _PlayerCard extends StatelessWidget {
-  const _PlayerCard({
-    required this.player,
-    required this.isTeamA,
-    required this.jerseyColor,
-    required this.isBonusEligible,
-    required this.selected,
-    required this.height,
-    required this.onTap,
-  });
-
-  final Player player;
-  final bool isTeamA;
-  final JerseyColor jerseyColor;
-  final bool isBonusEligible;
-  final bool selected;
-  final double height;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final double iconSize = (height * 0.78).clamp(22.0, 44.0);
-    final double fontSize = (height * 0.32).clamp(11.0, 14.0);
-    final double verticalPadding = (height * 0.08).clamp(2.0, 6.0);
-    return Padding(
-      padding: EdgeInsets.symmetric(vertical: verticalPadding * 0.4),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOut,
-        decoration: BoxDecoration(
-          color: selected
-              ? CbbcColors.blueSoft.withValues(alpha: 0.7)
-              : CbbcColors.surface,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: selected ? CbbcColors.blue : CbbcColors.slate200,
-            width: selected ? 1.2 : 1,
-          ),
-        ),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            key: Key('player-card-${player.id}'),
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(8),
-            child: Stack(
-              children: <Widget>[
-                if (selected)
-                  Positioned(
-                    left: 0,
-                    top: 4,
-                    bottom: 4,
-                    child: Container(
-                      width: 3,
-                      decoration: BoxDecoration(
-                        color: CbbcColors.blue,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    selected ? 9 : 6,
-                    verticalPadding,
-                    6,
-                    verticalPadding,
-                  ),
-                  child: Row(
-                    children: <Widget>[
-                      PlayerJerseyIcon(
-                        player: player,
-                        isTeamA: isTeamA,
-                        size: iconSize,
-                        jerseyColor: jerseyColor,
-                      ),
-                      const SizedBox(width: 6),
-                      if (isBonusEligible) ...<Widget>[
-                        Icon(
-                          Icons.star,
-                          size: fontSize + 1,
-                          color: CbbcColors.orange,
-                        ),
-                        const SizedBox(width: 2),
-                      ],
-                      Expanded(
-                        child: Text(
-                          player.displayName,
-                          maxLines: 3,
-                          softWrap: true,
-                          overflow: TextOverflow.ellipsis,
-                          textAlign: TextAlign.left,
-                          style: TextStyle(
-                            fontSize: fontSize,
-                            height: 1.1,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        (player.playerClass?.toStringAsFixed(1) ?? '—'),
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: fontSize,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -1145,7 +820,11 @@ class _BroadcastDialog extends StatelessWidget {
         children: <Widget>[
           const Text(
             'Aponte a câmera no QR code ou copie o link. A página pública '
-            'mostra apenas a quadra ao vivo.',
+            'mostra a quadra ao vivo, a relação de atletas e a comissão '
+            'técnica.\n\n'
+            'O link é deste tablet e continua o mesmo entre as partidas — '
+            'compartilhe uma vez com a transmissão. Ele só muda se ficar '
+            '24 horas sem uso ou se você tocar em "Encerrar".',
             style: TextStyle(fontSize: 13, color: CbbcColors.textSecondary),
           ),
           const SizedBox(height: 16),

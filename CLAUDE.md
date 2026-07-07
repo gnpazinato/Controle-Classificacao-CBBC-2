@@ -74,6 +74,12 @@ internet quando houver link.").
 ## Estado
 
 - Histórico completo no `CHANGELOG.md` (fonte da verdade de versões).
+- v2.5.0 — link de transmissão fixo por tablet (credenciais persistidas
+  no `CacheService`, retomadas via `BroadcastService.resume`; TTL de 24h
+  no servidor — mudanças em `functions/` exigem redeploy do Cloudflare
+  Pages) + viewer público com placar, relação de atletas e comissão
+  técnica (widgets compartilhados `match_header.dart` e
+  `team_roster_list.dart`).
 - v2.4.x — importação por link do Drive/OneDrive (planilha ou pasta com
   fotos por equipe, último link persistido) + comissão técnica via
   coluna `função`.
