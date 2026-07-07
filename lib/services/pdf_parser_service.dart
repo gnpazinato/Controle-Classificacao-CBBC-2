@@ -4,6 +4,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 
 import '../constants/player_classes.dart';
 import '../models/player.dart';
+import '../models/staff_member.dart';
 import '../models/team.dart';
 import 'column_mapping.dart';
 import 'import_result.dart';
@@ -71,8 +72,11 @@ class PdfParserService {
       }
 
       final List<Team> teams = buckets.values
-          .map((_ClubBucket b) =>
-              Team(id: b.id, clubName: b.name, players: b.players))
+          .map((_ClubBucket b) => Team(
+              id: b.id,
+              clubName: b.name,
+              players: b.players,
+              staff: b.staff))
           .toList();
 
       _detectDuplicateShirtNumbers(teams, issues);
@@ -159,6 +163,7 @@ class PdfParserService {
       final String dobRaw = (cells['dob'] ?? '').trim();
       final String genderRaw = (cells['gender'] ?? '').trim();
       final String photoRaw = (cells['photo'] ?? '').trim();
+      final String roleRaw = (cells['role'] ?? '').trim();
 
       if (name.isEmpty && classRaw.isEmpty && shirtRaw.isEmpty) continue;
 
@@ -167,6 +172,21 @@ class PdfParserService {
         clubId,
         () => _ClubBucket(id: clubId, name: clubName),
       );
+
+      // Linhas com "função" de comissão técnica não passam pela
+      // validação de atleta — só precisam do nome.
+      if (isStaffRole(roleRaw)) {
+        if (name.isNotEmpty) {
+          bucket.staff.add(StaffMember(
+            id: '$clubId::staff::${normalizeHeaderToken(name)}',
+            clubName: clubName,
+            fullName: name,
+            role: roleRaw,
+            photoUrl: normalizePlayerPhotoUrl(photoRaw),
+          ));
+        }
+        continue;
+      }
 
       final String playerLabel = name.isEmpty ? '(sem nome)' : name;
       bool valid = true;
@@ -356,4 +376,5 @@ class _ClubBucket {
   final String id;
   final String name;
   final List<Player> players = <Player>[];
+  final List<StaffMember> staff = <StaffMember>[];
 }

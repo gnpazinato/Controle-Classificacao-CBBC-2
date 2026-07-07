@@ -72,12 +72,40 @@ const Map<String, String> kHeaderAliases = <String, String>{
   'google_drive': 'photo',
   'drive': 'photo',
 
+  // função na equipe (atleta x comissão técnica)
+  'funcao': 'role',
+  'funcao_na_equipe': 'role',
+  'cargo': 'role',
+  'role': 'role',
+  'function': 'role',
+
   // competição (opcional)
   'competicao': 'competition',
   'competition': 'competition',
   'competition_name': 'competition',
   'nome_da_competicao': 'competition',
 };
+
+/// Valores da coluna `função` que continuam significando "atleta".
+/// Qualquer outro texto não-vazio marca a linha como comissão técnica.
+const Set<String> _kAthleteRoleTokens = <String>{
+  'atleta',
+  'atletas',
+  'jogador',
+  'jogadora',
+  'player',
+  'athlete',
+};
+
+/// `true` quando o valor da coluna `função` indica um membro da comissão
+/// técnica (técnico, assistente, fisioterapeuta, mecânico...). Vazio ou
+/// "atleta"/"jogador(a)" continuam sendo atletas.
+bool isStaffRole(String? raw) {
+  if (raw == null) return false;
+  final String token = normalizeHeaderToken(raw);
+  if (token.isEmpty) return false;
+  return !_kAthleteRoleTokens.contains(token);
+}
 
 /// Rótulos reconhecidos pra célula "Data de término da competição" no
 /// topo da planilha. Tratado fora de [canonicalField] porque é um
@@ -141,8 +169,8 @@ const Map<String, String> _accentMap = <String, String>{
 String _stripAccent(String c) => _accentMap[c] ?? c;
 
 /// Retorna o nome canônico do campo (`club`, `class`, `name`, `shirt`,
-/// `dob`, `gender`, `photo`, `competition`) ou `null` se o cabeçalho não for
-/// reconhecido.
+/// `dob`, `gender`, `photo`, `role`, `competition`) ou `null` se o
+/// cabeçalho não for reconhecido.
 String? canonicalField(String rawHeader) {
   final String key = normalizeHeaderToken(rawHeader);
   if (key.isEmpty) return null;

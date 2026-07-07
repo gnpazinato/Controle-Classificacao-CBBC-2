@@ -24,6 +24,42 @@ link."
 
 ---
 
+## 2.4.1 — 2026-07-07
+
+- **Comissão técnica no padrão visual da lista.** No resumo da
+  importação, cada membro da comissão usa os mesmos retângulos das
+  linhas de atleta: o campo do nome ocupa o espaço restante e o campo
+  da função fica alinhado à lateral direita (os dois editáveis).
+  Substitui o pontilhado da 2.4.0.
+- **Último link importado fica salvo.** O campo do diálogo "Importar
+  por link" abre preenchido com o último link usado — mesmo depois de
+  fechar o app ou desligar/reiniciar o tablet. "Começar do zero" não
+  apaga o link.
+
+## 2.4.0 — 2026-07-07
+
+- **Importação por link do Google Drive/OneDrive.** Novo card na tela
+  inicial: cole o link público de uma **planilha** (arquivo .xlsx/PDF ou
+  Google Planilhas) ou de uma **pasta**. Com pasta, o app localiza a
+  planilha na raiz e procura, em uma subpasta por equipe, as fotos de
+  atletas e comissão técnica — associadas pelo nome do arquivo (ex.:
+  `Gabriela.jpg` ou `Gabriela Giolo.png` → atleta "Gabriela Giolo"). As
+  fotos aparecem em quadra quando a pessoa entra em jogo. O link precisa
+  estar compartilhado como "qualquer pessoa com o link" (OneDrive
+  pessoal; SharePoint corporativo exige login e não é suportado). No
+  Android o recurso funciona por completo; no navegador o Google Drive
+  pode bloquear o acesso (CORS).
+- **Comissão técnica na planilha.** Nova coluna `função` (aceita também
+  `cargo`/`role`): linhas com valor diferente de "atleta" (ex.:
+  "Técnico", "Fisioterapeuta") entram como comissão técnica — só o nome
+  é obrigatório. No resumo da importação, os membros aparecem no fim da
+  lista de cada equipe no formato `Nome …… Função`. Eles não aparecem na
+  tela de jogo.
+- Modelos de planilha atualizados com a coluna `função` e exemplos de
+  comissão técnica.
+- Avisos de importação novos: pasta de fotos não encontrada para uma
+  equipe e fotos sem correspondência de nome.
+
 ## 2.3.4 — 2026-05-29
 
 - **Fotos das jogadoras agora carregam no viewer web.** O carregamento das

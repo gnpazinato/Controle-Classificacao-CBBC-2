@@ -11,6 +11,7 @@ class CacheService {
   CacheService({SharedPreferences? prefs}) : _injected = prefs;
 
   static const String _matchStateKey = 'cbbc.match_state.v1';
+  static const String _lastImportLinkKey = 'cbbc.last_import_link.v1';
 
   final SharedPreferences? _injected;
 
@@ -47,5 +48,22 @@ class CacheService {
   Future<void> clear() async {
     final SharedPreferences prefs = await _prefs();
     await prefs.remove(_matchStateKey);
+  }
+
+  /// Último link importado (Drive/OneDrive). Persistido fora da sessão
+  /// da partida: sobrevive a "Começar do zero", fechamento do app e
+  /// reinício do tablet.
+  Future<void> saveLastImportLink(String link) async {
+    final SharedPreferences prefs = await _prefs();
+    final String trimmed = link.trim();
+    if (trimmed.isEmpty) return;
+    await prefs.setString(_lastImportLinkKey, trimmed);
+  }
+
+  Future<String?> loadLastImportLink() async {
+    final SharedPreferences prefs = await _prefs();
+    final String? raw = prefs.getString(_lastImportLinkKey);
+    if (raw == null || raw.trim().isEmpty) return null;
+    return raw.trim();
   }
 }
