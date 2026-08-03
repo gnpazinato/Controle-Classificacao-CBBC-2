@@ -24,6 +24,27 @@ link."
 
 ---
 
+## 2.6.0 — 2026-08-03
+
+- **Data de nascimento opcional na importação.** Atleta sem data (célula
+  em branco ou coluna ausente) entra normalmente na planilha e no PDF;
+  só datas preenchidas mas ilegíveis geram aviso. Em compensação, na
+  configuração da partida os switches **Sub-16** e **Sub-23** ficam
+  bloqueados (com o motivo exibido) enquanto houver atleta sem data de
+  nascimento nas equipes envolvidas — sem como comprovar idade, não há
+  bonificação por categoria. O switch de atleta feminina segue livre.
+- **Casamento de fotos mais esperto.** A foto agora casa também quando a
+  planilha traz o nome abreviado e o arquivo traz o nome completo
+  ("GUSTAVO LASMAR" ↔ "Gustavo Freitas Lasmar.png"). Conectores ("de",
+  "da", "dos"...) são ignorados na comparação e palavras com 5+ letras
+  toleram uma única diferença de grafia ("Vitor" ↔ "Victor",
+  "Henirque" ↔ "Henrique") — grafia exata continua vencendo a
+  aproximada quando as duas existem no elenco. Sobrenomes divergentes do
+  mesmo atleta também casam quando o primeiro nome é único no clube
+  ("Wandemberg Nejaim.png" ↔ "WANDEMBERG DO NASCIMENTO"); com dois
+  atletas de mesmo primeiro nome em dúvida, a foto fica sem dono e vira
+  aviso, sem impedir a importação.
+
 ## 2.5.1 — 2026-07-07
 
 - **Foto da comissão técnica cortada como a das atletas.** O avatar

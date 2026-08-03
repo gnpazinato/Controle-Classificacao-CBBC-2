@@ -99,6 +99,111 @@ void main() {
       expect(match, isEmpty);
     });
 
+    test('planilha abreviada casa com arquivo de nome completo', () {
+      // Caso real da importação: planilha "GUSTAVO LASMAR", foto
+      // "Gustavo Freitas Lasmar.png".
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['GUSTAVO LASMAR', 'ERICK GABRIEL NASCIMENTO'],
+        <FolderImage>[
+          const FolderImage(
+              fileName: 'Gustavo Freitas Lasmar.png', url: 'u-gustavo'),
+          const FolderImage(
+              fileName: 'Erick Gabriel de Moura Nascimento.png',
+              url: 'u-erick'),
+        ],
+      );
+      expect(match[0]?.url, 'u-gustavo');
+      expect(match[1]?.url, 'u-erick');
+    });
+
+    test('conectores ("da", "de", "dos") não impedem o casamento', () {
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['RONALDO SANTOS', 'RYAN DOS SANTOS'],
+        <FolderImage>[
+          const FolderImage(
+              fileName: 'Ronaldo da Silva Santos.png', url: 'u-ronaldo'),
+          const FolderImage(
+              fileName: 'Ryan Gomes dos Santos.png', url: 'u-ryan'),
+        ],
+      );
+      expect(match[0]?.url, 'u-ronaldo');
+      expect(match[1]?.url, 'u-ryan');
+    });
+
+    test('grafia levemente diferente casa ("Vitor" ↔ "Victor")', () {
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['JOÃO VITOR NASCIMENTO'],
+        <FolderImage>[
+          const FolderImage(
+              fileName: 'João Victor Nascimento.png', url: 'u-joao'),
+        ],
+      );
+      expect(match[0]?.url, 'u-joao');
+    });
+
+    test('letras transpostas casam ("Henirque" ↔ "Henrique")', () {
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['JHON HENRIQUE OLIVEIRA'],
+        <FolderImage>[
+          const FolderImage(
+              fileName: 'Jhon Henirque Oliveira.png', url: 'u-jhon'),
+        ],
+      );
+      expect(match[0]?.url, 'u-jhon');
+    });
+
+    test('sobrenome divergente casa quando o primeiro nome é único', () {
+      // Mesmo atleta com sobrenomes diferentes na foto e na planilha:
+      // só existe um Wandemberg no elenco, então a foto é dele.
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['WANDEMBERG DO NASCIMENTO', 'RONALDO SANTOS'],
+        <FolderImage>[
+          const FolderImage(
+              fileName: 'Wandemberg Nejaim.png', url: 'u-wandemberg'),
+        ],
+      );
+      expect(match[0]?.url, 'u-wandemberg');
+      expect(match[1], isNull);
+    });
+
+    test('primeiro nome repetido no elenco não casa por sobrenome divergente',
+        () {
+      // Dois Joãos disputariam "João Pereira.png": ambígua, ninguém leva
+      // (a foto vira aviso, sem impedir a importação).
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['João da Silva Sauro', 'João do Nascimento'],
+        <FolderImage>[
+          const FolderImage(fileName: 'João Pereira.png', url: 'u-joao'),
+        ],
+      );
+      expect(match, isEmpty);
+    });
+
+    test('regra do primeiro nome não rouba foto de quem casa por inteiro',
+        () {
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['Wandemberg Nejaim', 'Wandemberg do Nascimento'],
+        <FolderImage>[
+          const FolderImage(
+              fileName: 'Wandemberg Nejaim.png', url: 'u-nejaim'),
+        ],
+      );
+      expect(match[0]?.url, 'u-nejaim');
+      expect(match[1], isNull);
+    });
+
+    test('grafia exata vence a aproximada quando os dois nomes existem', () {
+      final Map<int, FolderImage> match = matchImagesToNames(
+        <String>['Marcos Muniz', 'Marcus Muniz'],
+        <FolderImage>[
+          const FolderImage(fileName: 'Marcus Muniz.png', url: 'u-marcus'),
+          const FolderImage(fileName: 'Marcos Muniz.png', url: 'u-marcos'),
+        ],
+      );
+      expect(match[0]?.url, 'u-marcos');
+      expect(match[1]?.url, 'u-marcus');
+    });
+
     test('nome exato vence o parcial quando os dois existem', () {
       final Map<int, FolderImage> match = matchImagesToNames(
         <String>['Gabriela Giolo', 'Gabriela Santos'],

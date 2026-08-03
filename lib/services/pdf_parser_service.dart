@@ -65,7 +65,7 @@ class PdfParserService {
       if (!anyHeaderFound) {
         return ImportResult.error(
           'Não encontrei cabeçalho com as colunas esperadas '
-          '(clube, classe, atleta, camisa, data de nascimento, gênero) '
+          '(clube, classe, atleta, camisa, gênero) '
           'em nenhuma página do PDF.',
           ImportIssueCategory.missingRequiredColumn,
         );
@@ -236,18 +236,20 @@ class PdfParserService {
         }
       }
 
+      // Data de nascimento é OPCIONAL — mesma regra do parser de
+      // planilha: só avisa quando o valor existe mas é ininteligível.
       final DateTime? dob = parseDateOfBirth(dobRaw);
-      if (dob == null) {
+      if (dobRaw.isNotEmpty && dob == null) {
         issues.add(ImportIssue(
           category: ImportIssueCategory.missingDateOfBirth,
-          severity: ImportIssueSeverity.error,
-          message: 'Data de nascimento ausente ou inválida.',
+          severity: ImportIssueSeverity.warning,
+          message:
+              'Data de nascimento "$dobRaw" inválida para $playerLabel — atleta importado sem data.',
           rowNumber: i + 1,
           clubName: clubName,
           playerLabel: playerLabel,
           sheetName: 'PDF página $pageNumber',
         ));
-        valid = false;
       }
 
       if (name.isEmpty) {
@@ -291,12 +293,12 @@ class PdfParserService {
         hits.add(_TokenHit(field: field, startCol: m.start));
       }
     }
-    // Mínimo razoável: precisa pelo menos de name + class + shirt + dob.
+    // Mínimo razoável: precisa pelo menos de name + class + shirt.
+    // Data de nascimento é opcional na importação.
     final Set<String> fields = hits.map((_TokenHit h) => h.field).toSet();
     if (!fields.contains('name') ||
         !fields.contains('class') ||
-        !fields.contains('shirt') ||
-        !fields.contains('dob')) {
+        !fields.contains('shirt')) {
       return null;
     }
     hits.sort((_TokenHit a, _TokenHit b) => a.startCol.compareTo(b.startCol));

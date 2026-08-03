@@ -99,7 +99,7 @@ class _CategoryBlock extends StatelessWidget {
       case ImportIssueCategory.invalidPlayerClass:
         return 'Classes funcionais inválidas';
       case ImportIssueCategory.missingDateOfBirth:
-        return 'Atletas sem data de nascimento';
+        return 'Datas de nascimento inválidas';
       case ImportIssueCategory.missingRequiredColumn:
         return 'Colunas obrigatórias ausentes';
       case ImportIssueCategory.fileUnreadable:
@@ -126,9 +126,10 @@ class _CategoryBlock extends StatelessWidget {
       case ImportIssueCategory.invalidPlayerClass:
         return 'Use apenas: 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5.';
       case ImportIssueCategory.missingDateOfBirth:
-        return 'Preencha a data de nascimento (DD/MM/AAAA).';
+        return 'Corrija a data (DD/MM/AAAA) ou deixe em branco — sem ela a '
+            'bonificação Sub-16/Sub-23 fica indisponível na partida.';
       case ImportIssueCategory.missingRequiredColumn:
-        return 'Verifique se o cabeçalho contém: clube, classe, atleta, camisa, data de nascimento, gênero.';
+        return 'Verifique se o cabeçalho contém: clube, classe, atleta, camisa, gênero. Data de nascimento é opcional.';
       case ImportIssueCategory.fileUnreadable:
         return 'O arquivo não pôde ser interpretado como .xlsx ou PDF.';
       case ImportIssueCategory.emptyFile:

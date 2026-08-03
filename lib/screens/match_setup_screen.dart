@@ -56,6 +56,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       _endDate = widget.competitionEndDate ?? _addDays(DateTime.now(), 7);
     }
     _todayDate = _stripTime(DateTime.now());
+    _clearYouthBonusIfBlocked();
   }
 
   static DateTime _stripTime(DateTime d) => DateTime.utc(d.year, d.month, d.day);
@@ -86,6 +87,39 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
   bool get _teamsAreSame =>
       _teamA != null && _teamB != null && _teamA == _teamB;
 
+  /// Atletas sem data de nascimento nas equipes escolhidas (ou em todas
+  /// as equipes carregadas, enquanto nenhuma foi escolhida). Com um que
+  /// seja, as bonificações Sub-16/Sub-23 ficam bloqueadas: não dá pra
+  /// comprovar a idade.
+  int get _playersWithoutDob {
+    final List<Team> selected = <Team>[
+      if (_teamA != null) _teamA!,
+      if (_teamB != null && _teamB != _teamA) _teamB!,
+    ];
+    final List<Team> scope = selected.isNotEmpty ? selected : _availableTeams;
+    int count = 0;
+    for (final Team team in scope) {
+      for (final Player p in team.players) {
+        if (p.dateOfBirth == null) count++;
+      }
+    }
+    return count;
+  }
+
+  void _setTeam({Team? a, Team? b, bool setA = false, bool setB = false}) {
+    setState(() {
+      if (setA) _teamA = a;
+      if (setB) _teamB = b;
+      _clearYouthBonusIfBlocked();
+    });
+  }
+
+  void _clearYouthBonusIfBlocked() {
+    if (_playersWithoutDob > 0 && (_bonus.youthU16 || _bonus.youthU23)) {
+      _bonus = _bonus.copyWith(youthU16: false, youthU23: false);
+    }
+  }
+
   bool get _canStart =>
       _teamA != null && _teamB != null && !_teamsAreSame;
 
@@ -110,6 +144,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
 
   void _onStartPressed() {
     if (!_canStart) return;
+    _clearYouthBonusIfBlocked();
     final Team a = _teamA!;
     final Team b = _teamB!;
     final MatchState state = MatchState(
@@ -167,7 +202,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                       value: _teamA,
                       teams: teams,
                       onChanged: (Team? value) =>
-                          setState(() => _teamA = value),
+                          _setTeam(a: value, setA: true),
                     ),
                     if (_teamA != null) ...<Widget>[
                       const SizedBox(height: 12),
@@ -194,7 +229,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                       value: _teamB,
                       teams: teams,
                       onChanged: (Team? value) =>
-                          setState(() => _teamB = value),
+                          _setTeam(b: value, setB: true),
                     ),
                     if (_teamB != null) ...<Widget>[
                       const SizedBox(height: 12),
@@ -218,6 +253,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
               const SizedBox(height: 20),
               _BonusSection(
                 rules: _bonus,
+                playersWithoutDob: _playersWithoutDob,
                 onChanged: (BonusRules r) => setState(() => _bonus = r),
               ),
               const SizedBox(height: 16),
@@ -590,14 +626,24 @@ class _DateRow extends StatelessWidget {
 }
 
 class _BonusSection extends StatelessWidget {
-  const _BonusSection({required this.rules, required this.onChanged});
+  const _BonusSection({
+    required this.rules,
+    required this.playersWithoutDob,
+    required this.onChanged,
+  });
 
   final BonusRules rules;
+
+  /// Quantos atletas do escopo atual estão sem data de nascimento.
+  /// Acima de zero, os switches Sub-16/Sub-23 ficam desabilitados.
+  final int playersWithoutDob;
+
   final ValueChanged<BonusRules> onChanged;
 
   @override
   Widget build(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
+    final bool youthBlocked = playersWithoutDob > 0;
     return Container(
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
       decoration: BoxDecoration(
@@ -630,13 +676,28 @@ class _BonusSection extends StatelessWidget {
             style: text.bodySmall?.copyWith(color: CbbcColors.textSecondary),
           ),
           const SizedBox(height: 4),
+          if (youthBlocked)
+            Padding(
+              padding: const EdgeInsets.only(top: 6, bottom: 2),
+              child: Text(
+                'Sub-16 e Sub-23 indisponíveis: $playersWithoutDob '
+                'atleta(s) sem data de nascimento na importação.',
+                key: const Key('bonus-youth-blocked-message'),
+                style: text.bodySmall?.copyWith(
+                  color: CbbcColors.alertRed,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           _BonusSwitch(
             keyName: 'bonus-u16-checkbox',
             title: 'Sub-16',
             hint:
                 'Para ter bonificação, o atleta não pode completar 17 anos durante a competição.',
             value: rules.youthU16,
-            onChanged: (bool v) => onChanged(rules.copyWith(youthU16: v)),
+            onChanged: youthBlocked
+                ? null
+                : (bool v) => onChanged(rules.copyWith(youthU16: v)),
           ),
           _BonusSwitch(
             keyName: 'bonus-u23-checkbox',
@@ -644,7 +705,9 @@ class _BonusSection extends StatelessWidget {
             hint:
                 'Para ter bonificação, o atleta não pode completar 24 anos durante a competição.',
             value: rules.youthU23,
-            onChanged: (bool v) => onChanged(rules.copyWith(youthU23: v)),
+            onChanged: youthBlocked
+                ? null
+                : (bool v) => onChanged(rules.copyWith(youthU23: v)),
           ),
           _BonusSwitch(
             keyName: 'bonus-female-checkbox',
@@ -673,7 +736,9 @@ class _BonusSwitch extends StatelessWidget {
   final String title;
   final String hint;
   final bool value;
-  final ValueChanged<bool> onChanged;
+
+  /// `null` desabilita o switch (bonificação indisponível).
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {

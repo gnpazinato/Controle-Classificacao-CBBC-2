@@ -22,7 +22,8 @@ class SheetData {
 ///
 /// Aceita três layouts:
 /// - **Aba única "Atletas"**: cabeçalho com `clube`, `classe`, `atleta`,
-///   `camisa`, `data de nascimento`, `genero`, `foto`. Uma linha por atleta.
+///   `camisa`, `genero`, e opcionalmente `data de nascimento` e `foto`.
+///   Uma linha por atleta.
 /// - **Uma aba por clube**: nome da aba = nome do clube. Cabeçalho sem
 ///   coluna `clube`.
 /// - **Seções por clube** (uma aba só): cada bloco começa com uma linha
@@ -32,19 +33,19 @@ class SheetData {
 class SpreadsheetParserService {
   const SpreadsheetParserService();
 
+  // `dob` (data de nascimento) fica de fora: é opcional na importação —
+  // sem ela só as bonificações Sub-16/Sub-23 ficam indisponíveis.
   static const Set<String> _requiredFieldsSingleSheet = <String>{
     'club',
     'class',
     'name',
     'shirt',
-    'dob',
     'gender',
   };
   static const Set<String> _requiredFieldsPerSheet = <String>{
     'class',
     'name',
     'shirt',
-    'dob',
     'gender',
   };
 
@@ -654,18 +655,21 @@ class SpreadsheetParserService {
       }
     }
 
+    // Data de nascimento é OPCIONAL: em branco, o atleta entra sem data e
+    // as bonificações Sub-16/Sub-23 ficam indisponíveis na partida. Só
+    // vira aviso quando o valor existe mas não dá pra interpretar.
     final DateTime? dob = parseDateOfBirth(dobRaw);
-    if (dob == null) {
+    if (dobRaw.isNotEmpty && dob == null) {
       issues.add(ImportIssue(
         category: ImportIssueCategory.missingDateOfBirth,
-        severity: ImportIssueSeverity.error,
-        message: 'Data de nascimento ausente ou inválida (use DD/MM/AAAA).',
+        severity: ImportIssueSeverity.warning,
+        message:
+            'Data de nascimento "$dobRaw" inválida para $playerLabel (use DD/MM/AAAA) — atleta importado sem data.',
         sheetName: sheetName,
         rowNumber: rowNumber,
         clubName: clubName,
         playerLabel: playerLabel,
       ));
-      valid = false;
     }
 
     if (!valid) return null;
