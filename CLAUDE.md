@@ -63,9 +63,13 @@ A cada rodada de ajustes:
    - **MINOR** (`X.Y.Z` → `X.Y+1.0`): novo recurso/tela/regra.
    - **MAJOR** (`X.Y.Z` → `X+1.0.0`): quebra dados antigos ou redesenha
      o fluxo principal.
-4. Adicione a entrada nova no topo do `CHANGELOG.md` (data
+4. Atualize também `version:` no `pubspec.yaml` (`X.Y.Z+N`, com o
+   build number `+N` sempre incrementado) — é dele que o CI tira o nome
+   do APK e o `versionCode` Android; esquecer trava a atualização por
+   cima da instalação antiga.
+5. Adicione a entrada nova no topo do `CHANGELOG.md` (data
    `YYYY-MM-DD` + lista curta dos ajustes).
-5. Não pergunte ao usuário se ele quer atualizar a versão — ele já
+6. Não pergunte ao usuário se ele quer atualizar a versão — ele já
    pediu uma vez (essa convenção foi acordada). Apenas atualize.
 
 A versão é exibida na home (abaixo da frase "Dados offline. Fotos usam
