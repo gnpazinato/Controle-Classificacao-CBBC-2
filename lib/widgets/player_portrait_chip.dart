@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -6,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../models/player.dart';
+import '../services/photo_disk_cache.dart';
 import '../theme/cbbc_theme.dart';
 
 class PlayerPortraitChip extends StatelessWidget {
@@ -189,18 +191,45 @@ class _PortraitFrameState extends State<_PortraitFrame> {
   static Future<PortraitPhoto?> _futureFor(String url) {
     return _cache.putIfAbsent(url, () async {
       final PortraitPhoto? photo = await _load(url);
-      _resolved[url] = photo;
+      if (photo == null) {
+        // Não fixa a falha: com internet instável, a próxima montagem do
+        // chip (ou o próximo precache) tenta baixar de novo.
+        _cache.remove(url);
+      } else {
+        _resolved[url] = photo;
+      }
       return photo;
     });
   }
 
+  /// Rede primeiro; se o download falhar (sem internet no ginásio), cai
+  /// pro cache em disco gravado na última vez em que a foto baixou.
   static Future<PortraitPhoto?> _load(String url) async {
+    Uint8List? network;
     try {
       final http.Response res = await _httpClient
           .get(Uri.parse(url))
           .timeout(const Duration(seconds: 15));
-      if (res.statusCode != 200) return null;
-      final Uint8List bytes = res.bodyBytes;
+      if (res.statusCode == 200) network = res.bodyBytes;
+    } catch (_) {
+      network = null;
+    }
+    if (network != null) {
+      final PortraitPhoto? photo = await _decode(network);
+      if (photo != null) {
+        // Persiste só o que decodificou como imagem — resposta HTML de
+        // aviso do Drive (status 200) não entra no cache offline.
+        unawaited(savePhotoToDisk(url, network));
+        return photo;
+      }
+    }
+    final Uint8List? disk = await loadPhotoFromDisk(url);
+    if (disk == null) return null;
+    return _decode(disk);
+  }
+
+  static Future<PortraitPhoto?> _decode(Uint8List bytes) async {
+    try {
       final ui.Codec codec =
           await ui.instantiateImageCodec(bytes, targetWidth: 640);
       final ui.FrameInfo frame = await codec.getNextFrame();

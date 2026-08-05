@@ -5,9 +5,11 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_version.dart';
 import '../models/match_state.dart';
+import '../models/roster_snapshot.dart';
 import '../services/cache_service.dart';
 import '../services/import_result.dart';
 import '../services/link_import_service.dart';
+import '../services/roster_sync_service.dart';
 import '../services/pdf_parser_service.dart';
 import '../services/spreadsheet_parser_service.dart';
 import '../services/template_generator_service.dart';
@@ -40,13 +42,15 @@ class LoadSpreadsheetScreen extends StatefulWidget {
     TemplateGeneratorService? templates,
     TemplateSaveFn? saveTemplate,
     LinkImportService? linkImporter,
+    RosterSyncService? rosterSync,
   })  : _xlsxParser = xlsxParser,
         _pdfParser = pdfParser,
         _cache = cache,
         _filePicker = filePicker,
         _templates = templates,
         _saveTemplate = saveTemplate,
-        _linkImporter = linkImporter;
+        _linkImporter = linkImporter,
+        _rosterSync = rosterSync;
 
   final SpreadsheetParserService? _xlsxParser;
   final PdfParserService? _pdfParser;
@@ -55,6 +59,7 @@ class LoadSpreadsheetScreen extends StatefulWidget {
   final TemplateGeneratorService? _templates;
   final TemplateSaveFn? _saveTemplate;
   final LinkImportService? _linkImporter;
+  final RosterSyncService? _rosterSync;
 
   @override
   State<LoadSpreadsheetScreen> createState() => _LoadSpreadsheetScreenState();
@@ -68,6 +73,11 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
   late final TemplateGeneratorService _templates;
   late final TemplateSaveFn _saveTemplate;
   late final LinkImportService _linkImporter;
+
+  /// Dono do elenco da competição durante toda a vida do app (esta tela é
+  /// a raiz da navegação). É ele quem persiste os dados no tablet e
+  /// mantém a sincronização periódica com a planilha da nuvem.
+  late final RosterSyncService _rosterSync;
 
   bool _busy = false;
   String? _busyLabel;
@@ -87,10 +97,20 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
     _templates = widget._templates ?? const TemplateGeneratorService();
     _saveTemplate = widget._saveTemplate ?? platform_saver.defaultSaveTemplate;
     _linkImporter = widget._linkImporter ?? LinkImportService();
+    _rosterSync = widget._rosterSync ??
+        RosterSyncService(importer: _linkImporter, cache: _cache);
     _cache.loadLastImportLink().then((String? link) {
       if (mounted && link != null) setState(() => _lastImportLink = link);
     });
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferRestore());
+  }
+
+  @override
+  void dispose() {
+    // Só descarta o serviço criado aqui — instância injetada (testes)
+    // pertence a quem injetou.
+    if (widget._rosterSync == null) _rosterSync.dispose();
+    super.dispose();
   }
 
   Future<_PickedFile?> _defaultFilePicker() async {
@@ -111,7 +131,15 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
     if (_hasPromptedRestore) return;
     _hasPromptedRestore = true;
     final bool hasSession = await _cache.hasMatchState();
-    if (!mounted || !hasSession) return;
+    if (!mounted) return;
+    if (hasSession) {
+      await _offerSessionRestore();
+      return;
+    }
+    await _maybeOfferRosterRestore();
+  }
+
+  Future<void> _offerSessionRestore() async {
     final bool? restore = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -142,13 +170,82 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
         _showSnack('Sessão salva não pôde ser restaurada.');
         return;
       }
+      // Recupera também o elenco completo da competição (se existir):
+      // a tela de configuração passa a listar todos os clubes — não só
+      // os dois da partida restaurada — e volta a sincronizar com a
+      // planilha quando houver link e internet.
+      final RosterSnapshot? roster = await _cache.loadRoster();
+      if (!mounted) return;
+      if (roster != null) await _rosterSync.adopt(roster, persist: false);
+      if (!mounted) return;
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
-          builder: (_) => MatchSetupScreen(restored: state),
+          builder: (_) => MatchSetupScreen(
+            restored: state,
+            sync: _rosterSync,
+          ),
         ),
       );
     } else {
       await _cache.clear();
+      if (!mounted) return;
+      await _maybeOfferRosterRestore();
+    }
+  }
+
+  /// Sem partida em andamento, mas com dados de competição salvos no
+  /// tablet: oferece retomá-los (funciona offline; com internet a
+  /// planilha é sincronizada em seguida) ou começar do zero.
+  Future<void> _maybeOfferRosterRestore() async {
+    final RosterSnapshot? saved = await _cache.loadRoster();
+    if (!mounted || saved == null || saved.teams.isEmpty) return;
+    final String what = saved.competitionName == null ||
+            saved.competitionName!.trim().isEmpty
+        ? 'da última importação'
+        : 'de "${saved.competitionName}"';
+    final bool? usePrevious = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Carregar dados da competição anterior?'),
+          content: Text(
+            'Encontrei os dados $what salvos neste tablet '
+            '(${saved.teams.length} equipe(s), ${saved.playerCount} '
+            'atleta(s)). Eles funcionam sem internet; havendo conexão e '
+            'link, a planilha é sincronizada automaticamente.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              key: const Key('roster-restore-decline'),
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Começar do zero'),
+            ),
+            FilledButton(
+              key: const Key('roster-restore-accept'),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Usar dados anteriores'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) return;
+    if (usePrevious == true) {
+      await _rosterSync.adopt(saved, persist: false);
+      if (!mounted) return;
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute<void>(
+          builder: (_) => MatchSetupScreen(
+            teams: saved.teams,
+            competitionName: saved.competitionName,
+            competitionEndDate: saved.competitionEndDate,
+            sync: _rosterSync,
+          ),
+        ),
+      );
+    } else {
+      await _rosterSync.clear();
     }
   }
 
@@ -203,7 +300,7 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
         },
       );
       if (!mounted) return;
-      await _showImportResult(result);
+      await _showImportResult(result, sourceLink: url.trim());
     } finally {
       if (mounted) {
         setState(() {
@@ -214,7 +311,8 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
     }
   }
 
-  Future<void> _showImportResult(ImportResult result) async {
+  Future<void> _showImportResult(ImportResult result,
+      {String? sourceLink}) async {
     if (result.hasBlockingIssues && result.teams.isEmpty) {
       await Navigator.of(context).push<void>(
         MaterialPageRoute<void>(
@@ -223,11 +321,24 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
       );
       return;
     }
+    // Importação válida: grava o elenco no tablet na hora. A partir daqui
+    // o app funciona offline; se veio de link, o re-sync periódico liga.
+    if (result.teams.isNotEmpty && !result.hasBlockingIssues) {
+      await _rosterSync.adopt(RosterSnapshot(
+        teams: result.teams,
+        competitionName: result.competitionName,
+        competitionEndDate: result.competitionEndDate,
+        sourceLink: sourceLink,
+        savedAt: DateTime.now(),
+      ));
+      if (!mounted) return;
+    }
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => ValidationSummaryScreen(
           result: result,
           cache: _cache,
+          sync: _rosterSync,
         ),
       ),
     );

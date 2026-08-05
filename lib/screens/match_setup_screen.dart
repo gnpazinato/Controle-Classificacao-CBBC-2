@@ -1,17 +1,27 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../constants/point_limits.dart';
 import '../models/match_state.dart';
 import '../models/player.dart';
+import '../models/staff_member.dart';
 import '../models/team.dart';
+import '../services/roster_sync_service.dart';
 import '../theme/cbbc_theme.dart';
 import '../widgets/cbbc_logo_header.dart';
 import '../widgets/player_jersey_icon.dart';
+import '../widgets/player_portrait_chip.dart';
 import 'lineup_control_screen.dart';
 
 /// Configuração da partida: escolhe Equipe A, Equipe B, cor da camiseta,
 /// pontuação máxima, bonificações da competição e as datas de referência
 /// (hoje e término da competição).
+///
+/// Quando o elenco veio de um link (Drive/OneDrive), esta tela é o ponto
+/// de sincronização: re-importa a planilha ao entrar, ao voltar de uma
+/// partida e a cada ciclo do timer do [RosterSyncService] — alterações na
+/// nuvem aparecem aqui sem precisar recarregar o link na tela inicial.
 class MatchSetupScreen extends StatefulWidget {
   const MatchSetupScreen({
     super.key,
@@ -19,12 +29,17 @@ class MatchSetupScreen extends StatefulWidget {
     this.competitionName,
     this.competitionEndDate,
     this.restored,
+    this.sync,
   });
 
   final List<Team>? teams;
   final String? competitionName;
   final DateTime? competitionEndDate;
   final MatchState? restored;
+
+  /// Fonte viva do elenco. `null` em fluxos antigos/testes — a tela
+  /// funciona igual, só sem sincronização.
+  final RosterSyncService? sync;
 
   @override
   State<MatchSetupScreen> createState() => _MatchSetupScreenState();
@@ -57,6 +72,55 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     }
     _todayDate = _stripTime(DateTime.now());
     _clearYouthBonusIfBlocked();
+    final RosterSyncService? sync = widget.sync;
+    if (sync != null) {
+      sync.addListener(_onRosterChanged);
+      // Alterações feitas na planilha enquanto o app estava em outra tela
+      // (ou fechado) entram já na chegada — sem esperar o timer.
+      unawaited(sync.syncNow());
+    }
+    // Aquece o cache (memória + disco) das fotos de TODOS os clubes: é o
+    // que garante retratos funcionando no ginásio sem internet.
+    _precacheRosterPhotos();
+  }
+
+  @override
+  void dispose() {
+    widget.sync?.removeListener(_onRosterChanged);
+    super.dispose();
+  }
+
+  /// A planilha sincronizou (ou uma tentativa terminou): rebaixa o elenco
+  /// pro dropdown e re-resolve as equipes já escolhidas pelo id — que é
+  /// estável entre importações por derivar do nome do clube.
+  void _onRosterChanged() {
+    if (!mounted) return;
+    setState(() {
+      final List<Team> teams = _availableTeams;
+      _teamA = _resolveTeam(_teamA, teams);
+      _teamB = _resolveTeam(_teamB, teams);
+      _clearYouthBonusIfBlocked();
+    });
+    _precacheRosterPhotos();
+  }
+
+  static Team? _resolveTeam(Team? previous, List<Team> teams) {
+    if (previous == null) return null;
+    for (final Team t in teams) {
+      if (t.id == previous.id) return t;
+    }
+    // Clube sumiu da planilha: limpa a seleção em vez de apontar pra um
+    // objeto que não existe mais na lista do dropdown.
+    return null;
+  }
+
+  void _precacheRosterPhotos() {
+    unawaited(PlayerPhotoPrecache.precacheAll(<String?>[
+      for (final Team t in _availableTeams) ...<String?>[
+        for (final Player p in t.players) p.photoUrl,
+        for (final StaffMember s in t.staff) s.photoUrl,
+      ],
+    ]));
   }
 
   static DateTime _stripTime(DateTime d) => DateTime.utc(d.year, d.month, d.day);
@@ -64,7 +128,10 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       _stripTime(d.add(Duration(days: days)));
 
   List<Team> get _availableTeams {
-    final List<Team>? raw = widget.teams;
+    // Elenco sincronizado tem prioridade: reflete a planilha da nuvem.
+    final List<Team>? synced = widget.sync?.snapshot?.teams;
+    final List<Team>? raw =
+        (synced != null && synced.isNotEmpty) ? synced : widget.teams;
     final List<Team> source;
     if (raw != null) {
       source = raw;
@@ -82,7 +149,9 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
   }
 
   String? get _competitionName =>
-      widget.competitionName ?? widget.restored?.competitionName;
+      widget.sync?.snapshot?.competitionName ??
+      widget.competitionName ??
+      widget.restored?.competitionName;
 
   bool get _teamsAreSame =>
       _teamA != null && _teamB != null && _teamA == _teamB;
@@ -142,7 +211,7 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
     onPicked(_stripTime(picked));
   }
 
-  void _onStartPressed() {
+  Future<void> _onStartPressed() async {
     if (!_canStart) return;
     _clearYouthBonusIfBlocked();
     final Team a = _teamA!;
@@ -157,11 +226,14 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       teamAJerseyColor: _teamAColor,
       teamBJerseyColor: _teamBColor,
     );
-    Navigator.of(context).push<void>(
+    await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => LineupControlScreen(initialState: state),
       ),
     );
+    // Voltou da partida: sincroniza na hora pra qualquer alteração feita
+    // na planilha durante o jogo aparecer já na montagem do próximo.
+    if (mounted) unawaited(widget.sync?.syncNow());
   }
 
   @override
@@ -190,6 +262,11 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
                           color: CbbcColors.blueDeep,
                         ),
                   ),
+                ),
+              if (widget.sync?.hasLink ?? false)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _SyncStatusBanner(sync: widget.sync!),
                 ),
               _TeamCard(
                 title: 'Equipe A',
@@ -300,6 +377,91 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
             label: const Text('Iniciar partida'),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Faixa discreta com o estado da sincronização com a planilha da nuvem:
+/// sincronizando agora, sincronizada (com horário) ou sem conexão usando
+/// os dados salvos no tablet.
+class _SyncStatusBanner extends StatelessWidget {
+  const _SyncStatusBanner({required this.sync});
+
+  final RosterSyncService sync;
+
+  /// Carimbo "dd/MM às HH:MM" — diz exatamente de quando é a versão da
+  /// planilha/pasta que o tablet está usando.
+  static String _stamp(DateTime d) {
+    final String day = d.day.toString().padLeft(2, '0');
+    final String month = d.month.toString().padLeft(2, '0');
+    final String h = d.hour.toString().padLeft(2, '0');
+    final String m = d.minute.toString().padLeft(2, '0');
+    return '$day/$month às $h:$m';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final IconData icon;
+    final Color color;
+    final String message;
+    Widget? leading;
+
+    if (sync.isSyncing) {
+      icon = Icons.sync;
+      color = CbbcColors.blueDeep;
+      message = 'Sincronizando com a planilha…';
+      leading = const SizedBox(
+        width: 14,
+        height: 14,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: CbbcColors.blueDeep,
+        ),
+      );
+    } else if (sync.lastError != null) {
+      icon = Icons.cloud_off_outlined;
+      color = CbbcColors.orange;
+      // Sem sync nesta execução, vale a data de gravação do elenco salvo
+      // no tablet — é a "versão da pasta" que está em uso.
+      final DateTime? ok = sync.lastSyncAt ?? sync.snapshot?.savedAt;
+      message = ok == null
+          ? 'Sem conexão com a planilha — usando os dados salvos no tablet.'
+          : 'Sem conexão com a planilha — usando os dados de ${_stamp(ok)}.';
+    } else if (sync.lastSyncAt != null) {
+      icon = Icons.cloud_done_outlined;
+      color = CbbcColors.successGreen;
+      message = 'Planilha sincronizada em ${_stamp(sync.lastSyncAt!)}.';
+    } else {
+      icon = Icons.cloud_queue_outlined;
+      color = CbbcColors.textSecondary;
+      message = 'Aguardando a primeira sincronização com a planilha…';
+    }
+
+    return Container(
+      key: const Key('roster-sync-banner'),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: <Widget>[
+          leading ?? Icon(icon, size: 16, color: color),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: color,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }

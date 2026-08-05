@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/match_state.dart';
+import '../models/roster_snapshot.dart';
 
 /// Persiste o estado da partida em `shared_preferences` para sobreviver
 /// a bloqueio de tela, alternancia entre apps e encerramento do
@@ -13,6 +14,7 @@ class CacheService {
   static const String _matchStateKey = 'cbbc.match_state.v1';
   static const String _lastImportLinkKey = 'cbbc.last_import_link.v1';
   static const String _broadcastSessionKey = 'cbbc.broadcast_session.v1';
+  static const String _rosterKey = 'cbbc.roster.v1';
 
   final SharedPreferences? _injected;
 
@@ -49,6 +51,36 @@ class CacheService {
   Future<void> clear() async {
     final SharedPreferences prefs = await _prefs();
     await prefs.remove(_matchStateKey);
+  }
+
+  /// Elenco da competição (todas as equipes importadas + link de origem).
+  /// Persistido fora da sessão da partida: sobrevive a troca de equipes,
+  /// fechamento do app e reinício do tablet — é o que permite trabalhar
+  /// offline no ginásio. Só some quando o usuário escolhe "Começar do
+  /// zero" no diálogo de restauração.
+  Future<void> saveRoster(RosterSnapshot snapshot) async {
+    final SharedPreferences prefs = await _prefs();
+    await prefs.setString(_rosterKey, jsonEncode(snapshot.toJson()));
+  }
+
+  Future<RosterSnapshot?> loadRoster() async {
+    final SharedPreferences prefs = await _prefs();
+    final String? raw = prefs.getString(_rosterKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final dynamic decoded = jsonDecode(raw);
+      if (decoded is! Map<String, dynamic>) return null;
+      final RosterSnapshot snapshot = RosterSnapshot.fromJson(decoded);
+      if (snapshot.teams.isEmpty) return null;
+      return snapshot;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> clearRoster() async {
+    final SharedPreferences prefs = await _prefs();
+    await prefs.remove(_rosterKey);
   }
 
   /// Último link importado (Drive/OneDrive). Persistido fora da sessão

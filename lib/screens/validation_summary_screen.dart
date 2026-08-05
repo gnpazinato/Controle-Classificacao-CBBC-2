@@ -8,6 +8,7 @@ import '../models/team.dart';
 import '../services/cache_service.dart';
 import '../services/import_result.dart';
 import '../services/player_photo_url.dart';
+import '../services/roster_sync_service.dart';
 import '../theme/cbbc_theme.dart';
 import '../widgets/cbbc_logo_header.dart';
 import 'match_setup_screen.dart';
@@ -18,10 +19,15 @@ class ValidationSummaryScreen extends StatefulWidget {
     super.key,
     required this.result,
     this.cache,
+    this.sync,
   });
 
   final ImportResult result;
   final CacheService? cache;
+
+  /// Serviço de sincronização/persistência do elenco. Recebe as edições
+  /// manuais feitas aqui (renomear clube, excluir atleta…) ao continuar.
+  final RosterSyncService? sync;
 
   @override
   State<ValidationSummaryScreen> createState() =>
@@ -214,7 +220,7 @@ class _ValidationSummaryScreenState extends State<ValidationSummaryScreen> {
                 child: FilledButton(
                   key: const Key('continue-button'),
                   onPressed: errors.isEmpty && _teams.length >= 2
-                      ? () => _continue(context)
+                      ? _continue
                       : null,
                   child: const Text('Continuar'),
                 ),
@@ -351,13 +357,19 @@ class _ValidationSummaryScreenState extends State<ValidationSummaryScreen> {
     );
   }
 
-  Future<void> _continue(BuildContext context) async {
+  Future<void> _continue() async {
+    // Persiste as edições manuais no elenco salvo do tablet. No modo
+    // link, a próxima sincronização com a planilha sobrescreve — a
+    // nuvem é a fonte da verdade.
+    await widget.sync?.updateTeams(_teams);
+    if (!mounted) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => MatchSetupScreen(
           teams: _teams,
           competitionName: widget.result.competitionName,
           competitionEndDate: widget.result.competitionEndDate,
+          sync: widget.sync,
         ),
       ),
     );

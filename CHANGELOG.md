@@ -24,6 +24,31 @@ link."
 
 ---
 
+## 2.8.0 — 2026-08-05
+
+- **Sincronização automática com a planilha da nuvem.** No modo link
+  (Drive/OneDrive), o app re-importa a planilha e as pastas de fotos
+  sozinho: ao entrar na tela de seleção de equipes, ao voltar de uma
+  partida e a cada 15 segundos em segundo plano. Alterações na planilha
+  (atletas, classes, equipes novas, fotos novas ou movidas de pasta)
+  aparecem sem recarregar o link na tela inicial. A partida em andamento
+  nunca é alterada — os dados novos valem pro próximo jogo. Uma faixa na
+  tela de configuração mostra o estado: sincronizando, sincronizada às
+  HH:MM ou sem conexão (usando os dados salvos).
+- **Modo offline de verdade.** Toda importação bem-sucedida grava o
+  elenco completo da competição no tablet, e cada foto baixada fica
+  arquivada no armazenamento interno. Sem internet no ginásio, o app
+  funciona normalmente com os últimos dados sincronizados — inclusive os
+  retratos em quadra. Internet instável não derruba nada: cada tentativa
+  de sync que falha mantém os dados salvos e tenta de novo no próximo
+  ciclo.
+- **"Carregar dados da competição anterior?"** Ao abrir o app sem
+  partida em andamento, ele oferece retomar a competição salva (com
+  contagem de equipes e atletas) ou começar do zero. Retomando com
+  internet, a planilha é sincronizada na sequência; sem internet, valem
+  os dados do tablet. Ao restaurar uma sessão de partida, o elenco
+  completo da competição também volta pro dropdown de equipes.
+
 ## 2.7.0 — 2026-08-05
 
 - **Nome da equipe na quadra, com placar maior.** O quadrinho de canto deu
