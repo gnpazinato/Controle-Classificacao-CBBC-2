@@ -5,10 +5,11 @@
 // Por que não testar a tela inteira: o Flutter 3.32 + harness de teste
 // neste app entra em StackOverflow ao montar Scaffold + Navigator + Stack
 // profundo (mesmo problema do smoke_test pré-existente). Em vez disso,
-// renderizamos só os componentes afetados (chip + score badge) nos
-// tamanhos que eles teriam dentro da quadra real, em paisagem e retrato.
+// renderizamos só os componentes afetados (chip + badge de nome/placar)
+// nos tamanhos que eles teriam dentro da quadra real.
 
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -37,74 +38,110 @@ Player _player({
 }
 
 /// Reproduz a geometria de slots da quadra: tomamos `courtW × courtH` e
-/// dispomos 5 chips em 3+2 igual a `_CourtView`, mais um score badge no
-/// canto. Retorna o Widget pra render+screenshot.
+/// dispomos 5 chips em 3+2 igual ao `CourtBoard`, mais o badge de linha
+/// única (nome + placar) no topo/base. Retorna o Widget pra
+/// render+screenshot.
 Widget _courtMock({
   required double courtW,
   required double courtH,
   required String labelTotal,
   required String labelLimit,
 }) {
-  // Mesmos valores de `lib/screens/lineup_control_screen.dart`.
+  // Mesmos valores de `lib/widgets/court_view.dart` (v2.7.0).
   const List<Offset> targetsA = <Offset>[
-    Offset(0.22, 0.13),
-    Offset(0.50, 0.13),
-    Offset(0.78, 0.13),
-    Offset(0.36, 0.37),
-    Offset(0.64, 0.37),
+    Offset(0.20, 0.19),
+    Offset(0.50, 0.19),
+    Offset(0.80, 0.19),
+    Offset(0.33, 0.37),
+    Offset(0.67, 0.37),
   ];
   const List<Offset> targetsB = <Offset>[
-    Offset(0.22, 0.87),
-    Offset(0.50, 0.87),
-    Offset(0.78, 0.87),
-    Offset(0.36, 0.63),
-    Offset(0.64, 0.63),
+    Offset(0.20, 0.81),
+    Offset(0.50, 0.81),
+    Offset(0.80, 0.81),
+    Offset(0.33, 0.63),
+    Offset(0.67, 0.63),
   ];
   final double slotMaxWidth = courtW * 0.22;
   final double slotMaxHeight = courtH * 0.16;
-  final double badgeAnchor = courtW;
-  final double badgeMargin = badgeAnchor * 0.018;
+  final double badgeMargin = courtW * 0.018;
 
-  // Mesma fórmula do _CourtScoreBadge novo.
-  final double fontTotal = (badgeAnchor * 0.034).clamp(11.0, 22.0);
-  final double fontLimit = fontTotal * 0.78;
-  final double padH = (badgeAnchor * 0.022).clamp(6.0, 14.0);
-  final double padV = (badgeAnchor * 0.014).clamp(3.0, 8.0);
-  final double radius = (badgeAnchor * 0.022).clamp(7.0, 12.0);
+  // Mesmas fórmulas do _CourtTeamBadge.
+  final double fontScore = courtW * 0.048;
+  final double fontLimit = fontScore * 0.75;
+  final double fontName = courtW * 0.038;
+  final double padH = courtW * 0.024;
+  final double padV = courtW * 0.016;
+  final double radius = courtW * 0.022;
+  final double gap = courtW * 0.016;
 
-  Widget badge(String t, String l, {required Key key}) => Container(
-        key: key,
-        padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(radius),
-          boxShadow: <BoxShadow>[
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.40),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
+  Widget badge(
+    String name,
+    String t,
+    String l, {
+    required Key key,
+    required bool alignEnd,
+  }) =>
+      Row(
+        mainAxisAlignment:
+            alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+        children: <Widget>[
+          Flexible(
+            child: Container(
+              key: key,
+              padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(radius),
+                boxShadow: <BoxShadow>[
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.40),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Flexible(
+                    child: Text(name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: CbbcColors.textPrimary,
+                          fontSize: fontName,
+                          fontWeight: FontWeight.w800,
+                          height: 1.1,
+                        )),
+                  ),
+                  SizedBox(width: gap),
+                  Container(
+                    width: 1,
+                    height: fontScore,
+                    color:
+                        CbbcColors.textSecondary.withValues(alpha: 0.35),
+                  ),
+                  SizedBox(width: gap),
+                  Text(t,
+                      style: TextStyle(
+                        color: CbbcColors.blueDeep,
+                        fontSize: fontScore,
+                        fontWeight: FontWeight.w900,
+                        height: 1,
+                      )),
+                  Text(' / $l',
+                      style: TextStyle(
+                        color: CbbcColors.textSecondary,
+                        fontSize: fontLimit,
+                        fontWeight: FontWeight.w600,
+                        height: 1,
+                      )),
+                ],
+              ),
             ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            Text(t,
-                style: TextStyle(
-                  color: CbbcColors.blueDeep,
-                  fontSize: fontTotal,
-                  fontWeight: FontWeight.w900,
-                  height: 1,
-                )),
-            Text(' / $l',
-                style: TextStyle(
-                  color: CbbcColors.textSecondary,
-                  fontSize: fontLimit,
-                  fontWeight: FontWeight.w600,
-                  height: 1,
-                )),
-          ],
-        ),
+          ),
+        ],
       );
 
   final List<Player> teamA = <Player>[
@@ -170,14 +207,17 @@ Widget _courtMock({
               Positioned(
                 top: badgeMargin,
                 left: badgeMargin,
-                child: badge(labelTotal, labelLimit,
-                    key: const Key('score-corner-top-left')),
+                right: badgeMargin,
+                child: badge('ESTRELA BC', labelTotal, labelLimit,
+                    key: const Key('team-badge-a'), alignEnd: false),
               ),
               Positioned(
                 bottom: badgeMargin,
+                left: badgeMargin,
                 right: badgeMargin,
-                child: badge(labelTotal, labelLimit,
-                    key: const Key('score-corner-bottom-right')),
+                child: badge(
+                    'ASSOCIAÇÃO VIDA SOBRE RODAS BC', labelTotal, labelLimit,
+                    key: const Key('team-badge-b'), alignEnd: true),
               ),
             ],
           ),
@@ -212,14 +252,23 @@ Rect _rectOf(WidgetTester tester, Key key) {
   return box.localToGlobal(Offset.zero) & box.size;
 }
 
-/// Verifica que os badges dos cantos não sobrepõem a área "central" dos
-/// chips das extremidades. Usado para garantir layout responsivo em
-/// vários tamanhos.
-void _expectNoOverlapAtCorner(WidgetTester tester, double courtW) {
-  final Rect topLeftBadge =
-      _rectOf(tester, const Key('score-corner-top-left'));
-  final Rect bottomRightBadge =
-      _rectOf(tester, const Key('score-corner-bottom-right'));
+/// Verifica o layout dos badges de nome + placar: cada um inteiro na sua
+/// metade da quadra, sem invadir a área "central" de nenhum chip, e a
+/// pílula (com nome longo truncado) cabendo na largura útil.
+void _expectBadgeLayout(WidgetTester tester, double courtW, double courtH) {
+  final Rect badgeA = _rectOf(tester, const Key('team-badge-a'));
+  final Rect badgeB = _rectOf(tester, const Key('team-badge-b'));
+  final double margin = courtW * 0.018;
+
+  // Cada badge fica inteiro na metade da sua equipe.
+  expect(badgeA.bottom, lessThan(courtH / 2),
+      reason: 'Badge A $badgeA cruzou a linha central (h=$courtH).');
+  expect(badgeB.top, greaterThan(courtH / 2),
+      reason: 'Badge B $badgeB cruzou a linha central (h=$courtH).');
+
+  // Nome longo trunca: a pílula nunca passa da largura útil.
+  expect(badgeA.width, lessThanOrEqualTo(courtW - 2 * margin + 0.5));
+  expect(badgeB.width, lessThanOrEqualTo(courtW - 2 * margin + 0.5));
 
   final List<Rect> chipRects = find
       .byType(PlayerPortraitChip)
@@ -230,38 +279,14 @@ void _expectNoOverlapAtCorner(WidgetTester tester, double courtW) {
       })
       .toList(growable: false);
 
-  // Chip de extremidade esquerda na linha de frente: o de menor x.dx na
-  // metade superior. Mesma ideia pra direito-fundo.
-  Rect? leftFrontChip;
-  Rect? rightBackChip;
-  for (final Rect r in chipRects) {
-    if (r.center.dx < courtW / 2 && r.top < courtW) {
-      if (leftFrontChip == null || r.left < leftFrontChip.left) {
-        leftFrontChip = r;
-      }
-    }
-    if (r.center.dx > courtW / 2) {
-      if (rightBackChip == null || r.right > rightBackChip.right) {
-        rightBackChip = r;
-      }
-    }
-  }
-
-  void check(String label, Rect badge, Rect chip) {
-    // A "área central" do chip = retrato + badges agarrados; vamos exigir
-    // que o badge dos cantos não invada o retrato (deflate de 15 % do
-    // shortest side).
+  // A "área central" do chip = retrato + badges agarrados; o badge de
+  // equipe não pode invadir o retrato (deflate de 15% do shortest side).
+  for (final Rect chip in chipRects) {
     final Rect chipCore = chip.deflate(chip.shortestSide * 0.15);
+    final Rect badge = chip.center.dy < courtH / 2 ? badgeA : badgeB;
     expect(chipCore.overlaps(badge), isFalse,
-        reason: '$label $badge sobrepõe centro do chip extremo '
-            '$chipCore (chip cheio $chip).');
-  }
-
-  if (leftFrontChip != null) {
-    check('Badge superior-esquerdo', topLeftBadge, leftFrontChip);
-  }
-  if (rightBackChip != null) {
-    check('Badge inferior-direito', bottomRightBadge, rightBackChip);
+        reason: 'Badge $badge sobrepõe centro do chip $chipCore '
+            '(chip cheio $chip).');
   }
 }
 
@@ -282,7 +307,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull);
 
-    _expectNoOverlapAtCorner(tester, w);
+    _expectBadgeLayout(tester, w, h);
     await _saveScreenshot(tester, 'quadra_portrait_600x1124');
   });
 
@@ -302,7 +327,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull);
 
-    _expectNoOverlapAtCorner(tester, w);
+    _expectBadgeLayout(tester, w, h);
     await _saveScreenshot(tester, 'quadra_landscape_400x750');
   });
 
@@ -322,7 +347,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull);
 
-    _expectNoOverlapAtCorner(tester, w);
+    _expectBadgeLayout(tester, w, h);
     await _saveScreenshot(tester, 'quadra_phone_320x600');
   });
 
@@ -342,7 +367,31 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(tester.takeException(), isNull);
 
-    _expectNoOverlapAtCorner(tester, w);
+    _expectBadgeLayout(tester, w, h);
     await _saveScreenshot(tester, 'quadra_large_800x1500');
+  });
+
+  test('estrela de bonificação não invade a classe do chip vizinho', () {
+    // Geometria pura, espelhando as fórmulas de court_view.dart e
+    // player_portrait_chip.dart (v2.7.0). Vale pra qualquer tamanho de
+    // quadra porque tudo é proporcional a w (aspect fixo 1504/2816).
+    const double w = 1.0;
+    const double h = 2816 / 1504; // ≈ 1.872 — quadra sempre portrait
+    const double chipH = h * 0.16;
+    final double chipW = math.min(w * 0.22, chipH * 0.84);
+    const double jersey = chipH * 0.32;
+    const double classBadge = chipH * 0.30;
+
+    // Linha de 3 (x 0.20/0.50/0.80): centros vizinhos a 0.30w.
+    final double gapEntreChips = 0.30 * w - chipW;
+    // Estrela: right = -jersey*0.08 → borda direita 0.08*jersey fora do
+    // chip. Classe do vizinho: left = -classe*0.50 → 0.50*classe fora.
+    // (Estrela e classe ocupam a mesma faixa vertical do topo do chip;
+    // camisa e classe ficam em faixas distintas e não competem.)
+    const double protrusoes = jersey * 0.08 + classBadge * 0.50;
+
+    expect(protrusoes, lessThan(gapEntreChips),
+        reason: 'estrela + classe ($protrusoes) não cabem no vão entre '
+            'chips vizinhos ($gapEntreChips)');
   });
 }

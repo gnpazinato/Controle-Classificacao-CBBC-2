@@ -109,6 +109,10 @@ class BroadcastService {
         _sessionId = sessionId;
         _writeToken = writeToken;
         _latest = null;
+        // O POST acima já entregou este envelope — registrá-lo garante que
+        // o heartbeat tenha o que reenviar mesmo sem nenhum toque na
+        // quadra após a retomada (senão o viewer marcaria "sem conexão").
+        _lastSent = envelope;
         _startHeartbeat();
         return BroadcastResumeResult.resumed;
       }
@@ -127,8 +131,16 @@ class BroadcastService {
   void _startHeartbeat() {
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(kBroadcastHeartbeat, (_) {
-      final Map<String, dynamic>? payload = _latest ?? _lastSent;
-      if (payload != null) unawaited(_send(payload));
+      // Se já existe tráfego a caminho (POST em voo ou estado pendente no
+      // _drain), ele mesmo renova o `updated_at` no servidor — reenviar
+      // agora só arriscaria intercalar com o POST em voo e gravar estado
+      // fora de ordem (o servidor não tem seq pra descartar o mais velho).
+      // Ocioso, reenvia o último estado entregue pelo caminho coalescido
+      // ([push] → [_drain]) — isso também recupera um push que falhou
+      // offline, então não precisamos de retry dedicado.
+      if (_sending || _latest != null) return;
+      final Map<String, dynamic>? payload = _lastSent;
+      if (payload != null) push(payload);
     });
   }
 

@@ -45,6 +45,14 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
   MatchState? _state;
   CourtStyle _courtStyle = CourtStyle.claro;
 
+  /// Tablet parou de transmitir (ou o espectador perdeu a rede): a quadra
+  /// é zerada com o aviso "Sem conexão com o tablet" até o sinal voltar.
+  bool _stale = false;
+
+  /// Última resposta 200 do servidor — fallback pra marcar stale quando o
+  /// próprio espectador fica sem rede (sem `age_ms` pra consultar).
+  DateTime _lastOkPoll = DateTime.now();
+
   @override
   void initState() {
     super.initState();
@@ -75,6 +83,7 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
       if (res.statusCode != 200) {
         setState(() {
           if (_state == null) _status = _ViewerStatus.error;
+          _stale = _isLocallyStale();
         });
         return;
       }
@@ -92,19 +101,34 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
       final MatchState next = MatchState.fromJson(stateJson);
       final CourtStyle style =
           CourtStyle.fromName(envelope['courtStyle'] as String?);
+      _lastOkPoll = DateTime.now();
       setState(() {
         _state = next;
         _courtStyle = style;
         _status = _ViewerStatus.live;
+        // `age_ms` vem do relógio DO SERVIDOR (Function nova). Se o tablet
+        // parou de gravar há mais de kViewerStaleAfter, zera a quadra.
+        // Function antiga (sem o campo) ⇒ nunca stale, como antes.
+        _stale = broadcastAgeIsStale(body['age_ms']);
       });
     } catch (_) {
       if (!mounted) return;
-      // Falha de rede: se já temos estado, mantemos o último na tela.
-      if (_state == null) setState(() => _status = _ViewerStatus.error);
+      // Falha de rede: se já temos estado, mantemos o último na tela —
+      // mas depois de kViewerStaleAfter sem resposta o aviso entra.
+      setState(() {
+        if (_state == null) _status = _ViewerStatus.error;
+        _stale = _isLocallyStale();
+      });
     } finally {
       _fetching = false;
     }
   }
+
+  /// Stale medido pelo relógio local: usado quando o servidor está
+  /// inalcançável (espectador offline) e não há `age_ms` pra consultar.
+  bool _isLocallyStale() =>
+      _state != null &&
+      DateTime.now().difference(_lastOkPoll) > kViewerStaleAfter;
 
   /// Reescreve as fotos do Drive (atletas e comissão técnica) para o
   /// endpoint com CORS, in-place no JSON do estado, antes de montar o
@@ -140,9 +164,17 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
         child: LayoutBuilder(
           builder: (BuildContext _, BoxConstraints c) {
             if (c.maxWidth >= _wideBreakpoint) {
-              return _WideViewerBody(state: state, courtStyle: _courtStyle);
+              return _WideViewerBody(
+                state: state,
+                courtStyle: _courtStyle,
+                stale: _stale,
+              );
             }
-            return _NarrowViewerBody(state: state, courtStyle: _courtStyle);
+            return _NarrowViewerBody(
+              state: state,
+              courtStyle: _courtStyle,
+              stale: _stale,
+            );
           },
         ),
       ),
@@ -172,10 +204,15 @@ class _PublicViewerScreenState extends State<PublicViewerScreen> {
 /// tela do tablet — listas nas laterais, quadra no centro — e a comissão
 /// técnica de cada equipe embaixo da respectiva lista.
 class _WideViewerBody extends StatelessWidget {
-  const _WideViewerBody({required this.state, required this.courtStyle});
+  const _WideViewerBody({
+    required this.state,
+    required this.courtStyle,
+    required this.stale,
+  });
 
   final MatchState state;
   final CourtStyle courtStyle;
+  final bool stale;
 
   @override
   Widget build(BuildContext context) {
@@ -204,6 +241,7 @@ class _WideViewerBody extends StatelessWidget {
                       state: state,
                       courtStyle: courtStyle,
                       showHints: false,
+                      disconnected: stale,
                     ),
                   ),
                 ),
@@ -272,10 +310,15 @@ class _ViewerTeamPanel extends StatelessWidget {
 /// Layout de tela estreita (celular em pé): tudo numa coluna rolável —
 /// quadra, relação da Equipe A com sua comissão, depois a Equipe B.
 class _NarrowViewerBody extends StatelessWidget {
-  const _NarrowViewerBody({required this.state, required this.courtStyle});
+  const _NarrowViewerBody({
+    required this.state,
+    required this.courtStyle,
+    required this.stale,
+  });
 
   final MatchState state;
   final CourtStyle courtStyle;
+  final bool stale;
 
   @override
   Widget build(BuildContext context) {
@@ -289,6 +332,7 @@ class _NarrowViewerBody extends StatelessWidget {
               state: state,
               courtStyle: courtStyle,
               showHints: false,
+              disconnected: stale,
             ),
           ),
           TeamRosterList(

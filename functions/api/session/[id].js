@@ -1,5 +1,5 @@
 // Rotas da sessão por id:
-//   GET    /api/session/:id  → viewer lê o estado     { state, updated_at }
+//   GET    /api/session/:id  → viewer lê o estado  { state, updated_at, age_ms }
 //   POST   /api/session/:id  → tablet atualiza estado (exige write_token)
 //   DELETE /api/session/:id  → tablet encerra a sessão (exige write_token)
 
@@ -33,7 +33,14 @@ export async function onRequestGet({ env, params }) {
   } catch (_) {
     state = {};
   }
-  return json({ state, updated_at: row.updated_at });
+  // age_ms é calculado AQUI (relógio do servidor): o viewer o usa pra
+  // detectar tablet sem transmitir, imune a relógio errado do espectador.
+  const updatedAt = row.updated_at ?? null;
+  return json({
+    state,
+    updated_at: updatedAt,
+    age_ms: updatedAt == null ? null : Math.max(0, Date.now() - updatedAt),
+  });
 }
 
 export async function onRequestPost({ env, params, request }) {

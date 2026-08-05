@@ -1,8 +1,8 @@
 // Testes de layout responsivo da quadra ao vivo. O objetivo aqui é
-// detectar regressões de sobreposição entre os score badges dos cantos
-// e os chips das jogadoras quando o tablet roda entre paisagem e
-// retrato. Também valida que o toque num chip em quadra dispara o
-// callback de remoção (interatividade da quadra).
+// detectar regressões de escala dos badges (classe/camisa) dos chips das
+// jogadoras quando o tablet roda entre paisagem e retrato. Também valida
+// que o toque num chip em quadra dispara o callback de remoção
+// (interatividade da quadra).
 //
 // Estes testes não montam o app inteiro (que falha por StackOverflow no
 // Flutter 3.32 — ver smoke_test.dart). Em vez disso, montam só os

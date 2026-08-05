@@ -31,7 +31,8 @@ enum CourtStyle {
   }
 }
 
-/// Tabuleiro da quadra com os chips das atletas e o placar nos cantos.
+/// Tabuleiro da quadra com os chips das atletas e o badge de nome + placar
+/// de cada equipe nas faixas do topo (A) e da base (B).
 ///
 /// Extraído da tela de jogo para poder ser reutilizado **idêntico** na
 /// página pública de transmissão. Quando [onPlayerTap] é `null`, os chips
@@ -45,6 +46,7 @@ class CourtBoard extends StatelessWidget {
     required this.courtStyle,
     this.onPlayerTap,
     this.showHints = true,
+    this.disconnected = false,
   });
 
   final MatchState state;
@@ -54,25 +56,31 @@ class CourtBoard extends StatelessWidget {
   final void Function(Player player, bool isTeamA)? onPlayerTap;
   final bool showHints;
 
+  /// Viewer público sem sinal do tablet: quadra "zerada" (nenhum chip,
+  /// nenhum badge) com o aviso central "Sem conexão com o tablet". A tela
+  /// operacional nunca liga esta flag.
+  final bool disconnected;
+
   static const double _aspectRatio = 1504 / 2816;
 
-  // Formação 3+2: linha de frente com 3 atletas perto do garrafão, linha
-  // de fundo com 2 atletas mais afastados, garantindo folga no meio campo
-  // entre as duas equipes.
+  // Formação 3+2 deslocada em direção ao meio da quadra: a faixa superior
+  // (equipe A) e inferior (equipe B) ficam livres para o badge de nome +
+  // placar, e o espaçamento lateral maior evita que a estrela de
+  // bonificação de um chip encoste na classe do chip vizinho.
   static const List<Offset> _teamATargets = <Offset>[
-    Offset(0.22, 0.13),
-    Offset(0.50, 0.13),
-    Offset(0.78, 0.13),
-    Offset(0.36, 0.37),
-    Offset(0.64, 0.37),
+    Offset(0.20, 0.19),
+    Offset(0.50, 0.19),
+    Offset(0.80, 0.19),
+    Offset(0.33, 0.37),
+    Offset(0.67, 0.37),
   ];
 
   static const List<Offset> _teamBTargets = <Offset>[
-    Offset(0.22, 0.87),
-    Offset(0.50, 0.87),
-    Offset(0.78, 0.87),
-    Offset(0.36, 0.63),
-    Offset(0.64, 0.63),
+    Offset(0.20, 0.81),
+    Offset(0.50, 0.81),
+    Offset(0.80, 0.81),
+    Offset(0.33, 0.63),
+    Offset(0.67, 0.63),
   ];
 
   @override
@@ -81,7 +89,9 @@ class CourtBoard extends StatelessWidget {
     final List<Player?> teamB = state.teamBSlotPlayers;
     final bool teamAEmpty = teamA.every((Player? p) => p == null);
     final bool teamBEmpty = teamB.every((Player? p) => p == null);
-    final bool hasAnyPlayerOnCourt = !teamAEmpty || !teamBEmpty;
+    // Sem sinal do tablet a quadra fica "zerada" — sem chips e sem dim.
+    final bool hasAnyPlayerOnCourt =
+        !disconnected && (!teamAEmpty || !teamBEmpty);
 
     final Widget courtImage = RotatedBox(
       quarterTurns: courtStyle.quarterTurns,
@@ -117,14 +127,13 @@ class CourtBoard extends StatelessWidget {
               // landscape) gerem o mesmo desenho proporcional.
               final double slotMaxWidth = w * 0.22;
               final double slotMaxHeight = h * 0.16;
-              // Badge dos cantos: ancorado na **largura** da quadra
+              // Badge de nome + placar: ancorado na **largura** da quadra
               // (não na altura). A quadra é sempre portrait, então w é
               // a dimensão estreita e dita o quão grande os chips
               // ficam — alinhar o badge a w faz com que ele mantenha
               // a mesma relação visual com o chip independente da
               // orientação do tablet.
-              final double badgeAnchor = w;
-              final double badgeMargin = badgeAnchor * 0.018;
+              final double badgeMargin = w * 0.018;
               return Stack(
                 alignment: Alignment.center,
                 children: <Widget>[
@@ -165,7 +174,7 @@ class CourtBoard extends StatelessWidget {
                   // remoção de uma jogadora reaproveite o slot de outra
                   // (causa do "flash" de várias fotos ao tirar atleta).
                   for (int i = 0; i < 5; i++)
-                    if (teamA[i] != null)
+                    if (!disconnected && teamA[i] != null)
                       _CourtPlayerSlot(
                         key: ValueKey<String>('court-a-${teamA[i]!.id}'),
                         player: teamA[i]!,
@@ -181,7 +190,7 @@ class CourtBoard extends StatelessWidget {
                             : () => onPlayerTap!(teamA[i]!, true),
                       ),
                   for (int i = 0; i < 5; i++)
-                    if (teamB[i] != null)
+                    if (!disconnected && teamB[i] != null)
                       _CourtPlayerSlot(
                         key: ValueKey<String>('court-b-${teamB[i]!.id}'),
                         player: teamB[i]!,
@@ -196,31 +205,43 @@ class CourtBoard extends StatelessWidget {
                             ? null
                             : () => onPlayerTap!(teamB[i]!, false),
                       ),
-                  // Placar espelho — canto superior esquerdo (Equipe A)
-                  // e inferior direito (Equipe B). Renderizado por último
-                  // pra ficar acima dos chips quando houver sobreposição.
-                  Positioned(
-                    top: badgeMargin,
-                    left: badgeMargin,
-                    child: _CourtScoreBadge(
-                      total: state.totalPointsTeamA,
-                      limit: state.effectiveLimitTeamA,
-                      isOver: state.isTeamAOverLimit,
-                      bonusActive: state.hasBonusInCourtTeamA,
-                      anchor: badgeAnchor,
+                  // Badge "NOME | pontos / limite" — faixa do topo (Equipe
+                  // A, alinhado à esquerda) e da base (Equipe B, alinhado à
+                  // direita). Renderizado por último pra ficar acima dos
+                  // chips quando houver sobreposição.
+                  if (!disconnected) ...<Widget>[
+                    Positioned(
+                      top: badgeMargin,
+                      left: badgeMargin,
+                      right: badgeMargin,
+                      child: _CourtTeamBadge(
+                        key: const Key('team-badge-a'),
+                        teamName: state.teamA.displayName,
+                        total: state.totalPointsTeamA,
+                        limit: state.effectiveLimitTeamA,
+                        isOver: state.isTeamAOverLimit,
+                        bonusActive: state.hasBonusInCourtTeamA,
+                        anchor: w,
+                        alignEnd: false,
+                      ),
                     ),
-                  ),
-                  Positioned(
-                    bottom: badgeMargin,
-                    right: badgeMargin,
-                    child: _CourtScoreBadge(
-                      total: state.totalPointsTeamB,
-                      limit: state.effectiveLimitTeamB,
-                      isOver: state.isTeamBOverLimit,
-                      bonusActive: state.hasBonusInCourtTeamB,
-                      anchor: badgeAnchor,
+                    Positioned(
+                      bottom: badgeMargin,
+                      left: badgeMargin,
+                      right: badgeMargin,
+                      child: _CourtTeamBadge(
+                        key: const Key('team-badge-b'),
+                        teamName: state.teamB.displayName,
+                        total: state.totalPointsTeamB,
+                        limit: state.effectiveLimitTeamB,
+                        isOver: state.isTeamBOverLimit,
+                        bonusActive: state.hasBonusInCourtTeamB,
+                        anchor: w,
+                        alignEnd: true,
+                      ),
                     ),
-                  ),
+                  ],
+                  if (disconnected) _DisconnectedOverlay(anchor: w),
                 ],
               );
             },
@@ -231,15 +252,19 @@ class CourtBoard extends StatelessWidget {
   }
 }
 
-class _CourtScoreBadge extends StatelessWidget {
-  const _CourtScoreBadge({
+class _CourtTeamBadge extends StatelessWidget {
+  const _CourtTeamBadge({
+    super.key,
+    required this.teamName,
     required this.total,
     required this.limit,
     required this.isOver,
     required this.bonusActive,
     required this.anchor,
+    required this.alignEnd,
   });
 
+  final String teamName;
   final double total;
   final double limit;
   final bool isOver;
@@ -250,21 +275,26 @@ class _CourtScoreBadge extends StatelessWidget {
   /// em telas pequenas e cresce em tablets grandes.
   final double anchor;
 
+  /// `false` ⇒ pílula encostada à esquerda (Equipe A, faixa do topo);
+  /// `true` ⇒ encostada à direita (Equipe B, faixa da base).
+  final bool alignEnd;
+
   @override
   Widget build(BuildContext context) {
     final Color totalColor =
         isOver ? CbbcColors.alertRed : CbbcColors.blueDeep;
-    // Dimensões proporcionais à largura da quadra. Calibrado para que o
-    // badge nunca invada a área dos chips dos cantos (front line em
-    // x ≈ 0.22; chip metade-largura ≈ 0.11 → badge limitado a ~0.10 da
-    // largura da quadra).
-    final double fontTotal = (anchor * 0.034).clamp(11.0, 22.0);
-    final double fontLimit = fontTotal * 0.78;
-    final double padH = (anchor * 0.022).clamp(6.0, 14.0);
-    final double padV = (anchor * 0.014).clamp(3.0, 8.0);
-    final double iconSize = fontTotal * 0.95;
-    final double radius = (anchor * 0.022).clamp(7.0, 12.0);
-    return AnimatedContainer(
+    // Linha única "NOME | pontos / limite" ocupando a faixa livre acima
+    // (A) / abaixo (B) da formação. Proporcional à largura da quadra, sem
+    // clamps absolutos — mesma convenção dos chips.
+    final double fontScore = anchor * 0.048;
+    final double fontLimit = fontScore * 0.75;
+    final double fontName = anchor * 0.038;
+    final double padH = anchor * 0.024;
+    final double padV = anchor * 0.016;
+    final double iconSize = fontScore * 0.90;
+    final double radius = anchor * 0.022;
+    final double gap = anchor * 0.016;
+    final Widget pill = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
       padding: EdgeInsets.symmetric(horizontal: padH, vertical: padV),
@@ -297,11 +327,32 @@ class _CourtScoreBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.center,
         children: <Widget>[
+          // Nome cede espaço primeiro: o placar nunca é truncado.
+          Flexible(
+            child: Text(
+              teamName,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: CbbcColors.textPrimary,
+                fontSize: fontName,
+                fontWeight: FontWeight.w800,
+                height: 1.1,
+              ),
+            ),
+          ),
+          SizedBox(width: gap),
+          Container(
+            width: 1,
+            height: fontScore,
+            color: CbbcColors.textSecondary.withValues(alpha: 0.35),
+          ),
+          SizedBox(width: gap),
           Text(
             total.toStringAsFixed(1),
             style: TextStyle(
               color: totalColor,
-              fontSize: fontTotal,
+              fontSize: fontScore,
               fontWeight: FontWeight.w900,
               height: 1,
               fontFeatures: const <FontFeature>[
@@ -329,6 +380,53 @@ class _CourtScoreBadge extends StatelessWidget {
               color: CbbcColors.orange,
             ),
           ],
+        ],
+      ),
+    );
+    // O Positioned pai estica esta Row na largura toda da quadra; a Row
+    // encosta a pílula no lado da equipe e limita o crescimento do nome.
+    return Row(
+      mainAxisAlignment:
+          alignEnd ? MainAxisAlignment.end : MainAxisAlignment.start,
+      children: <Widget>[Flexible(child: pill)],
+    );
+  }
+}
+
+class _DisconnectedOverlay extends StatelessWidget {
+  const _DisconnectedOverlay({required this.anchor});
+
+  /// Largura da quadra — todas as medidas são % dela.
+  final double anchor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('court-disconnected'),
+      constraints: BoxConstraints(maxWidth: anchor * 0.70),
+      padding: EdgeInsets.all(anchor * 0.06),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.62),
+        borderRadius: BorderRadius.circular(anchor * 0.03),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(
+            Icons.wifi_off_rounded,
+            size: anchor * 0.16,
+            color: Colors.white,
+          ),
+          SizedBox(height: anchor * 0.025),
+          Text(
+            'Sem conexão com o tablet',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: anchor * 0.045,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );

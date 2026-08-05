@@ -6,6 +6,7 @@
 import 'dart:convert';
 
 import 'package:controle_classificacao_cbbc/constants/broadcast_config.dart';
+import 'package:fake_async/fake_async.dart';
 import 'package:controle_classificacao_cbbc/services/broadcast_service.dart';
 import 'package:controle_classificacao_cbbc/services/cache_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,6 +102,95 @@ void main() {
       expect(service.isLive, isFalse);
 
       service.dispose();
+    });
+  });
+
+  group('BroadcastService — heartbeat', () {
+    test('pós-resume reenvia o envelope da retomada sem nenhum toque', () {
+      // Regressão: resume() não populava _lastSent, então o heartbeat
+      // ficava mudo até o 1º toque e o viewer marcava "sem conexão".
+      fakeAsync((FakeAsync async) {
+        final List<Map<String, dynamic>> bodies = <Map<String, dynamic>>[];
+        final MockClient mock = MockClient((http.Request req) async {
+          bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+          return http.Response('{"ok":true}', 200);
+        });
+        final BroadcastService service = BroadcastService(client: mock);
+
+        BroadcastResumeResult? result;
+        service
+            .resume(
+              sessionId: 'abc12',
+              writeToken: 'tok-1',
+              envelope: <String, dynamic>{'courtStyle': 'claro'},
+            )
+            .then((BroadcastResumeResult r) => result = r);
+        async.flushMicrotasks();
+        expect(result, BroadcastResumeResult.resumed);
+        expect(bodies, hasLength(1));
+
+        async.elapse(kBroadcastHeartbeat);
+        async.flushMicrotasks();
+        expect(bodies, hasLength(2),
+            reason: 'heartbeat deve reenviar o envelope da retomada');
+        expect(bodies.last['state'],
+            <String, dynamic>{'courtStyle': 'claro'});
+
+        service.dispose();
+      });
+    });
+
+    test('não intercala com um POST em voo nem regrava estado velho', () {
+      // Regressão: o heartbeat chamava _send direto, fora do guard
+      // _sending — podia intercalar com um push em andamento e gravar
+      // estado fora de ordem no servidor (que não tem seq pra descartar).
+      fakeAsync((FakeAsync async) {
+        int calls = 0;
+        final List<Map<String, dynamic>> bodies = <Map<String, dynamic>>[];
+        final MockClient mock = MockClient((http.Request req) async {
+          calls++;
+          bodies.add(jsonDecode(req.body) as Map<String, dynamic>);
+          if (calls == 2) {
+            // Segura o push do toque por 10s (dentro do timeout de 12s).
+            await Future<void>.delayed(const Duration(seconds: 10));
+          }
+          return http.Response('{"ok":true}', 200);
+        });
+        final BroadcastService service = BroadcastService(client: mock);
+
+        service.resume(
+          sessionId: 'abc12',
+          writeToken: 'tok-1',
+          envelope: <String, dynamic>{'v': 0},
+        );
+        async.flushMicrotasks();
+        expect(calls, 1);
+
+        // t=25s: toque na quadra — POST fica 10s em voo (até t=35s).
+        async.elapse(const Duration(seconds: 25));
+        service.push(<String, dynamic>{'v': 1});
+        async.flushMicrotasks();
+        expect(calls, 2);
+
+        // t=31s: o heartbeat (30s) disparou com o POST em voo → pula.
+        async.elapse(const Duration(seconds: 6));
+        expect(calls, 2,
+            reason: 'heartbeat não pode intercalar com POST em voo');
+
+        // t=36s: POST do toque completou; nada novo a enviar.
+        async.elapse(const Duration(seconds: 5));
+        async.flushMicrotasks();
+        expect(calls, 2);
+
+        // t=61s: heartbeat ocioso reenvia o ÚLTIMO estado (v:1, não v:0).
+        async.elapse(const Duration(seconds: 25));
+        async.flushMicrotasks();
+        expect(calls, 3);
+        expect(bodies.last['state'], <String, dynamic>{'v': 1},
+            reason: 'heartbeat deve reenviar o estado mais recente');
+
+        service.dispose();
+      });
     });
   });
 }

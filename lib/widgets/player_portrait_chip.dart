@@ -35,10 +35,11 @@ class PlayerPortraitChip extends StatelessWidget {
     final double chipWidth = math.min(maxWidth, chipHeight * 0.84);
 
     // Badges são proporcionais ao chip pra acompanhar telas variadas.
-    // Class badge: pill um pouco menor (0.26) com overhang reduzido pra
-    // não invadir o chip vizinho na linha de 3 atletas da frente.
-    final double classBadgeSize = chipHeight * 0.26;
-    final double jerseyBadgeSize = chipHeight * 0.28;
+    // Classe e camisa são a informação de leitura à distância — maiores
+    // que a v2.6 (0.26/0.28). O respiro lateral vem do espaçamento da
+    // formação em court_view.dart.
+    final double classBadgeSize = chipHeight * 0.30;
+    final double jerseyBadgeSize = chipHeight * 0.32;
     final String? photoUrl = player.photoUrl;
 
     final Widget stack = Stack(
@@ -74,7 +75,9 @@ class PlayerPortraitChip extends StatelessWidget {
           Positioned(
             right: -jerseyBadgeSize * 0.08,
             top: -jerseyBadgeSize * 0.10,
-            child: _BonusStarBadge(size: jerseyBadgeSize * 0.88),
+            // 0.72 (era 0.88): com a camisa maior, a estrela cheia
+            // encostava na classe do chip vizinho na linha de 3.
+            child: _BonusStarBadge(size: jerseyBadgeSize * 0.72),
           ),
       ],
     );

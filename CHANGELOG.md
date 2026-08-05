@@ -24,6 +24,25 @@ link."
 
 ---
 
+## 2.7.0 — 2026-08-05
+
+- **Nome da equipe na quadra, com placar maior.** O quadrinho de canto deu
+  lugar a uma linha única `NOME DA EQUIPE | pontos / limite` na faixa do
+  topo (Equipe A, à esquerda) e da base (Equipe B, à direita), com fonte
+  ~45% maior; nome longo trunca com "…" sem esconder o placar. A formação
+  3+2 se aproximou do meio da quadra e os chips se afastaram lateralmente;
+  foto do mesmo tamanho, número da camisa e classe ~15% maiores e estrela
+  de bonificação levemente menor (não encosta mais na classe do vizinho).
+  Tudo idêntico no tablet e no link de transmissão.
+- **Viewer avisa quando o tablet perde a conexão.** Se o tablet ficar ~90s
+  sem transmitir, o link ao vivo zera a quadra (nenhum chip) e mostra o
+  aviso central "Sem conexão com o tablet"; volta ao normal sozinho quando
+  o sinal retorna. Heartbeat da transmissão encurtado de 5 min para 30s e
+  duas correções de bastidor: a sessão retomada volta a ser mantida viva
+  pelo heartbeat mesmo sem toques na quadra, e o heartbeat não intercala
+  mais com um envio em andamento. ⚠️ Exige **redeploy do Cloudflare
+  Pages** (o GET da sessão agora devolve `age_ms`).
+
 ## 2.6.0 — 2026-08-03
 
 - **Data de nascimento opcional na importação.** Atleta sem data (célula
