@@ -11,3 +11,11 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# NENHUM material de chave vai pro repositório (público). O CI recebe o
+# keystore por secrets (KEYSTORE_BASE64 decodificado em cbbc-release.p12
+# + KEYSTORE_PASSWORD no keystore.properties) e monta estes arquivos em
+# tempo de build.
+keystore/keystore.properties
+keystore/*.p12
+keystore/*.base64

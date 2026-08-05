@@ -4,6 +4,15 @@ plugins {
     id "dev.flutter.flutter-gradle-plugin"
 }
 
+// Chave fixa de assinatura (android/keystore/). Sem ela o Android trata
+// cada APK como app "diferente" e recusa atualizar por cima — era o que
+// acontecia quando o release saía assinado com a chave debug efêmera do CI.
+def keystoreProperties = new Properties()
+def keystorePropertiesFile = rootProject.file('keystore/keystore.properties')
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+
 android {
     namespace = "br.org.cbbc.controle_classificacao_cbbc"
     compileSdk = 36
@@ -28,10 +37,25 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias = keystoreProperties['keyAlias']
+                keyPassword = keystoreProperties['keyPassword']
+                storeFile = rootProject.file(keystoreProperties['storeFile'])
+                storePassword = keystoreProperties['storePassword']
+                storeType = keystoreProperties['storeType']
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Usa chave debug pra permitir `flutter build apk --release` no CI sem keystore.
-            signingConfig = signingConfigs.debug
+            // Fallback pra chave debug só quando o keystore não está
+            // presente (ex.: fork sem a pasta keystore/).
+            signingConfig = keystorePropertiesFile.exists()
+                    ? signingConfigs.release
+                    : signingConfigs.debug
         }
     }
 }

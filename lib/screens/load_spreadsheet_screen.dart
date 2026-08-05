@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/app_version.dart';
 import '../models/match_state.dart';
@@ -10,6 +11,7 @@ import '../services/cache_service.dart';
 import '../services/import_result.dart';
 import '../services/link_import_service.dart';
 import '../services/roster_sync_service.dart';
+import '../services/update_check_service.dart';
 import '../services/pdf_parser_service.dart';
 import '../services/spreadsheet_parser_service.dart';
 import '../services/template_generator_service.dart';
@@ -43,6 +45,7 @@ class LoadSpreadsheetScreen extends StatefulWidget {
     TemplateSaveFn? saveTemplate,
     LinkImportService? linkImporter,
     RosterSyncService? rosterSync,
+    UpdateCheckService? updateChecker,
   })  : _xlsxParser = xlsxParser,
         _pdfParser = pdfParser,
         _cache = cache,
@@ -50,7 +53,8 @@ class LoadSpreadsheetScreen extends StatefulWidget {
         _templates = templates,
         _saveTemplate = saveTemplate,
         _linkImporter = linkImporter,
-        _rosterSync = rosterSync;
+        _rosterSync = rosterSync,
+        _updateChecker = updateChecker;
 
   final SpreadsheetParserService? _xlsxParser;
   final PdfParserService? _pdfParser;
@@ -60,6 +64,7 @@ class LoadSpreadsheetScreen extends StatefulWidget {
   final TemplateSaveFn? _saveTemplate;
   final LinkImportService? _linkImporter;
   final RosterSyncService? _rosterSync;
+  final UpdateCheckService? _updateChecker;
 
   @override
   State<LoadSpreadsheetScreen> createState() => _LoadSpreadsheetScreenState();
@@ -87,6 +92,10 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
   /// diálogo mesmo depois de fechar o app ou reiniciar o tablet.
   String? _lastImportLink;
 
+  /// Nova versão do app encontrada no GitHub Releases (null = está na
+  /// última, sem internet ou checagem ainda em andamento).
+  UpdateInfo? _updateInfo;
+
   @override
   void initState() {
     super.initState();
@@ -102,7 +111,24 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
     _cache.loadLastImportLink().then((String? link) {
       if (mounted && link != null) setState(() => _lastImportLink = link);
     });
+    (widget._updateChecker ?? UpdateCheckService())
+        .check()
+        .then((UpdateInfo? info) {
+      if (mounted && info != null) setState(() => _updateInfo = info);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferRestore());
+  }
+
+  Future<void> _onUpdatePressed(UpdateInfo info) async {
+    // Abre o link do APK no navegador do tablet: o Android baixa e, ao
+    // tocar no download, instala por cima mantendo os dados.
+    final bool ok = await launchUrl(
+      Uri.parse(info.apkUrl),
+      mode: LaunchMode.externalApplication,
+    );
+    if (!ok && mounted) {
+      _showSnack('Não consegui abrir o link de download da atualização.');
+    }
   }
 
   @override
@@ -386,6 +412,13 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
+              if (_updateInfo != null) ...<Widget>[
+                _UpdateAvailableCard(
+                  info: _updateInfo!,
+                  onTap: () => _onUpdatePressed(_updateInfo!),
+                ),
+                const SizedBox(height: 14),
+              ],
               _UploadCard(
                 busy: _busy,
                 onTap: _busy ? null : _onLoadPressed,
@@ -437,6 +470,91 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: CbbcColors.textSecondary,
                     ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Cartão destacado quando há versão mais nova publicada no GitHub.
+/// Toque abre o download do APK direto no tablet — sem baixar no
+/// computador e transferir.
+class _UpdateAvailableCard extends StatelessWidget {
+  const _UpdateAvailableCard({required this.info, required this.onTap});
+
+  final UpdateInfo info;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: CbbcColors.successGreen.withValues(alpha: 0.10),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        key: const Key('update-available-card'),
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: CbbcColors.successGreen.withValues(alpha: 0.55),
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  color: CbbcColors.surface,
+                  shape: BoxShape.circle,
+                  boxShadow: <BoxShadow>[
+                    BoxShadow(
+                      color: Color(0x14000000),
+                      blurRadius: 8,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.system_update,
+                  size: 26,
+                  color: CbbcColors.successGreen,
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Nova versão ${info.version} disponível',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: CbbcColors.blueDeep,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'Toque para baixar e instalar por cima — dados e '
+                      'link de transmissão são mantidos.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: CbbcColors.textSecondary,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.download_rounded,
+                color: CbbcColors.successGreen,
               ),
             ],
           ),

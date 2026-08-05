@@ -24,6 +24,25 @@ link."
 
 ---
 
+## 2.9.0 — 2026-08-05
+
+- **Atualização por cima, sem desinstalar.** O APK agora é assinado com
+  uma chave fixa, fornecida ao CI pelos secrets `KEYSTORE_BASE64` e
+  `KEYSTORE_PASSWORD` (nenhum material de chave fica no repositório).
+  Antes, cada build do CI saía com uma chave debug diferente e o Android
+  recusava instalar por cima — era preciso desinstalar, o que apagava os
+  dados e gerava um novo link de transmissão. A partir desta versão,
+  instalar a atualização por cima mantém tudo: dados salvos, elenco
+  offline e o link fixo do tablet. Atenção: a troca de chave exige
+  desinstalar UMA última vez ao migrar da 2.8.0 (ou anterior) para esta.
+- **Aviso "Nova versão disponível" na tela inicial.** O app consulta a
+  release mais recente no GitHub e, havendo versão mais nova, mostra um
+  cartão verde com o número da versão; o toque baixa o APK direto no
+  tablet (sem baixar no computador e transferir). Sem internet, o aviso
+  simplesmente não aparece.
+- **CI publica o APK como GitHub Release** a cada push na main (tag
+  `vX.Y.Z`) — é de lá que o botão de atualização baixa o arquivo.
+
 ## 2.8.0 — 2026-08-05
 
 - **Sincronização automática com a planilha da nuvem.** No modo link

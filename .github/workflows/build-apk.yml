@@ -15,6 +15,18 @@ jobs:
     name: Build release APK
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      # Necessário pra publicar a GitHub Release com o APK — é dela que o
+      # botão "nova versão disponível" do app baixa a atualização.
+      contents: write
+    env:
+      # Keystore fixo de assinatura, fornecido por secrets (nunca vive no
+      # repositório): KEYSTORE_BASE64 é o .p12 em base64 e
+      # KEYSTORE_PASSWORD a senha. Vazios (secrets não configurados) → o
+      # build assina com chave debug e o APK NÃO atualiza por cima da
+      # instalação anterior.
+      KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+      KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
 
     steps:
       - name: Checkout
@@ -54,6 +66,23 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      # Reconstrói o keystore e o keystore.properties (ambos gitignored)
+      # a partir dos secrets. Sem eles o build cai na chave debug
+      # (fallback do build.gradle).
+      - name: Configure release signing
+        if: ${{ env.KEYSTORE_BASE64 != '' && env.KEYSTORE_PASSWORD != '' }}
+        run: |
+          mkdir -p android/keystore
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d \
+            > android/keystore/cbbc-release.p12
+          {
+            echo "storeFile=keystore/cbbc-release.p12"
+            echo "storeType=PKCS12"
+            echo "keyAlias=cbbc"
+            echo "storePassword=${KEYSTORE_PASSWORD}"
+            echo "keyPassword=${KEYSTORE_PASSWORD}"
+          } > android/keystore/keystore.properties
+
       - name: Build release APK
         run: flutter build apk --release
 
@@ -74,3 +103,22 @@ jobs:
           path: build/app/outputs/flutter-apk/${{ steps.rename.outputs.apk_name }}
           if-no-files-found: error
           retention-days: 30
+
+      # Push na main → publica/atualiza a GitHub Release v<versão> com o
+      # APK anexado. O app consulta a release mais recente pra oferecer
+      # "nova versão disponível" na tela inicial, com download direto no
+      # tablet (sem baixar no computador e transferir).
+      - name: Publish GitHub Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.rename.outputs.version }}"
+          TAG="v${VERSION}"
+          APK="build/app/outputs/flutter-apk/${{ steps.rename.outputs.apk_name }}"
+          # Re-push da mesma versão substitui a release existente.
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" \
+            --title "Controle Classificação CBBC v${VERSION}" \
+            --notes "APK com assinatura fixa: instala por cima da versão anterior mantendo os dados do tablet (inclusive o link de transmissão). Detalhes no CHANGELOG.md." \
+            "$APK"
