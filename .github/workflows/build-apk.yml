@@ -108,8 +108,10 @@ jobs:
       # APK anexado. O app consulta a release mais recente pra oferecer
       # "nova versão disponível" na tela inicial, com download direto no
       # tablet (sem baixar no computador e transferir).
+      # Só publica com assinatura fixa configurada: um APK debug na
+      # release forçaria os tablets a desinstalar de novo na próxima.
       - name: Publish GitHub Release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && env.KEYSTORE_PASSWORD != ''
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
