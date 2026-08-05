@@ -48,7 +48,11 @@ Brasileira de Basquetebol em Cadeira de Rodas). UI 100% pt-BR.
 ## CI
 
 - Workflow `.github/workflows/build-apk.yml` roda em push pra main /
-  feat/* / fix/*. Gera APK release não-assinado (keystore debug).
+  feat/* / fix/*. Assina o APK com a chave fixa vinda dos secrets
+  `KEYSTORE_BASE64` + `KEYSTORE_PASSWORD` (sem eles cai na chave debug —
+  APK que NÃO atualiza por cima). Push na main com assinatura ok também
+  publica GitHub Release `vX.Y.Z` com o APK — fonte do aviso
+  "nova versão disponível" do app (`UpdateCheckService`).
 
 ## Versionamento (OBRIGATÓRIO antes de qualquer ajuste)
 
@@ -78,6 +82,13 @@ internet quando houver link.").
 ## Estado
 
 - Histórico completo no `CHANGELOG.md` (fonte da verdade de versões).
+- v2.9.0 — assinatura fixa via secrets do CI + release automática no
+  GitHub + cartão de atualização na tela inicial. Migração a partir da
+  2.8.0 ou anterior exige desinstalar UMA última vez (troca de chave).
+- v2.8.0 — `RosterSyncService`: elenco da competição persistido no
+  tablet (offline), re-sync do link a cada 15s/entrada na tela de
+  equipes, fotos arquivadas em disco (`photo_disk_cache`), diálogo
+  "carregar dados da competição anterior?".
 - v2.5.0 — link de transmissão fixo por tablet (credenciais persistidas
   no `CacheService`, retomadas via `BroadcastService.resume`; TTL de 24h
   no servidor — mudanças em `functions/` exigem redeploy do Cloudflare
