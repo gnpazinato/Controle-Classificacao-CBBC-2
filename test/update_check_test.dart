@@ -1,9 +1,25 @@
 import 'dart:convert';
 
+import 'package:controle_classificacao_cbbc/constants/app_version.dart';
+import 'package:controle_classificacao_cbbc/screens/load_spreadsheet_screen.dart';
 import 'package:controle_classificacao_cbbc/services/update_check_service.dart';
+import 'package:controle_classificacao_cbbc/utils/app_route_observer.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+/// Conta as checagens sem ir à rede — pra validar QUANDO a tela checa.
+class _CountingChecker extends UpdateCheckService {
+  int calls = 0;
+
+  @override
+  Future<UpdateInfo?> check({String currentVersion = kAppVersion}) async {
+    calls++;
+    return null;
+  }
+}
 
 http.Client Function() _clientWith(int status, Object body) {
   return () => MockClient((http.Request request) async {
@@ -90,5 +106,32 @@ void main() {
         isNull,
       );
     });
+  });
+
+  testWidgets('tela inicial re-checa atualização ao VOLTAR pra ela',
+      (WidgetTester tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final _CountingChecker checker = _CountingChecker();
+
+    await tester.pumpWidget(MaterialApp(
+      navigatorObservers: <NavigatorObserver>[appRouteObserver],
+      home: LoadSpreadsheetScreen(updateChecker: checker),
+    ));
+    await tester.pump();
+    expect(checker.calls, 1, reason: 'checagem inicial no initState');
+
+    // Navega pra outra tela (como entrar numa partida) e volta.
+    final NavigatorState navigator =
+        tester.state(find.byType(Navigator).first);
+    navigator.push(MaterialPageRoute<void>(
+      builder: (BuildContext _) => const Scaffold(body: SizedBox()),
+    ));
+    await tester.pumpAndSettle();
+    expect(checker.calls, 1, reason: 'sair da home não re-checa');
+
+    navigator.pop();
+    await tester.pumpAndSettle();
+    expect(checker.calls, 2,
+        reason: 'voltar pra home dispara nova checagem (didPopNext)');
   });
 }

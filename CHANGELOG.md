@@ -24,6 +24,24 @@ link."
 
 ---
 
+## 2.12.0 — 2026-08-06
+
+- **Substituição com pré-seleção (fila de entrada).** Com a quadra
+  cheia, tocar numa atleta do banco a coloca na fila de entrada — card
+  laranja com o selo da ordem ("1º ENTRA", "2º ENTRA"…). Tocar em quem
+  está em quadra (no desenho ou na lista) efetiva a troca com a primeira
+  da fila, na mesma posição; tocar de novo numa pré-selecionada cancela.
+  Com vaga em quadra ou sem fila, os gestos continuam como sempre foram.
+  A fila é por equipe, sobrevive à restauração de sessão e é esvaziada
+  pelos botões de limpar. Aprovado via prévia interativa.
+- **Botões "Limpar" espelhados.** "Limpar Equipe A" ancorado à esquerda
+  e "Limpar Equipe B" à direita — cada um do lado da lista da sua
+  equipe; os botões neutros ficam no centro.
+- **Aviso de atualização ao voltar pra tela inicial.** A checagem de
+  nova versão agora roda também quando você volta pra tela inicial (não
+  só na abertura do app) — release publicada durante a partida aparece
+  sem precisar fechar e reabrir o aplicativo.
+
 ## 2.11.0 — 2026-08-06
 
 - **Bonificação lembrada entre jogos.** A seleção Sub-16/Sub-23/feminina

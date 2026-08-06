@@ -226,18 +226,31 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
   }
 
   void _onPlayerTap(Player player, _Side side) {
-    final Set<String> bucket = side == _Side.a
-        ? _state.selectedTeamAIds
-        : _state.selectedTeamBIds;
-    final bool wasSelected = bucket.contains(player.id);
-    final bool nowSelected = _state.togglePlayer(player);
-    if (!wasSelected && !nowSelected) {
-      _showSnack(side == _Side.a
-          ? 'Apenas 5 atletas podem ser selecionados na Equipe A.'
-          : 'Apenas 5 atletas podem ser selecionados na Equipe B.');
-      return;
-    }
+    final PlayerTapResult result = _state.tapPlayer(player);
     setState(() {});
+    switch (result.outcome) {
+      case PlayerTapOutcome.queued:
+        _showSnack(
+          'Nº ${player.shirtNumber} na fila de entrada '
+          '(${result.queuePosition}º). Toque em quem sai.',
+          duration: const Duration(seconds: 3),
+        );
+      case PlayerTapOutcome.unqueued:
+        _showSnack(
+          'Nº ${player.shirtNumber} saiu da fila de entrada.',
+          duration: const Duration(seconds: 2),
+        );
+      case PlayerTapOutcome.substituted:
+        _showSnack(
+          'Troca: nº ${result.playerIn!.shirtNumber} entrou no lugar '
+          'da nº ${result.playerOut!.shirtNumber}.',
+          duration: const Duration(seconds: 3),
+        );
+      case PlayerTapOutcome.enteredCourt:
+      case PlayerTapOutcome.leftCourt:
+        // Gestos clássicos: sem aviso, como sempre foi.
+        break;
+    }
     _checkLimitCrossing();
     unawaited(_persist());
     _pushBroadcast();
@@ -490,6 +503,7 @@ class _TabletBody extends StatelessWidget {
             team: state.teamA,
             isTeamA: true,
             selectedIds: state.selectedTeamAIds,
+            queuedIds: state.entryQueueTeamAIds,
             onPlayerTap: (Player p) => onPlayerTap(p, _Side.a),
           ),
         ),
@@ -510,6 +524,7 @@ class _TabletBody extends StatelessWidget {
             team: state.teamB,
             isTeamA: false,
             selectedIds: state.selectedTeamBIds,
+            queuedIds: state.entryQueueTeamBIds,
             onPlayerTap: (Player p) => onPlayerTap(p, _Side.b),
           ),
         ),
@@ -553,6 +568,7 @@ class _PhoneBody extends StatelessWidget {
                   team: state.teamA,
                   isTeamA: true,
                   selectedIds: state.selectedTeamAIds,
+                  queuedIds: state.entryQueueTeamAIds,
                   onPlayerTap: (Player p) => onPlayerTap(p, _Side.a),
                 ),
                 _CourtView(
@@ -567,6 +583,7 @@ class _PhoneBody extends StatelessWidget {
                   team: state.teamB,
                   isTeamA: false,
                   selectedIds: state.selectedTeamBIds,
+                  queuedIds: state.entryQueueTeamBIds,
                   onPlayerTap: (Player p) => onPlayerTap(p, _Side.b),
                 ),
               ],
@@ -740,15 +757,17 @@ class _OperationalButtons extends StatelessWidget {
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
               visualDensity: VisualDensity.compact,
             );
+            // "Limpar Equipe A" ancorado à esquerda (lado da lista A) e
+            // "Limpar Equipe B" à direita (lado da lista B) — cada limpar
+            // do lado da equipe que ele afeta. Os botões neutros ficam no
+            // centro e quebram linha se faltar largura.
             return Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: compact ? 6 : 10,
                 vertical: compact ? 6 : 10,
               ),
-              child: Wrap(
-                alignment: WrapAlignment.center,
-                spacing: compact ? 6 : 10,
-                runSpacing: compact ? 6 : 10,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: <Widget>[
                   OutlinedButton.icon(
                     key: const Key('clear-team-a-button'),
@@ -757,34 +776,45 @@ class _OperationalButtons extends StatelessWidget {
                     icon: const Icon(Icons.backspace_outlined, size: 16),
                     label: Text(compact ? 'Limpar A' : 'Limpar Equipe A'),
                   ),
+                  Expanded(
+                    child: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: compact ? 6 : 10,
+                      runSpacing: compact ? 6 : 10,
+                      children: <Widget>[
+                        OutlinedButton.icon(
+                          key: const Key('clear-all-button'),
+                          onPressed: onClearAll,
+                          style: compact ? compactStyle : null,
+                          icon: const Icon(
+                              Icons.delete_sweep_outlined, size: 16),
+                          label: const Text('Limpar tudo'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const Key('change-teams-button'),
+                          onPressed: onChangeTeams,
+                          style: compact ? compactStyle : null,
+                          icon: const Icon(Icons.swap_horiz, size: 16),
+                          label: Text(compact ? 'Trocar' : 'Trocar equipes'),
+                        ),
+                        OutlinedButton.icon(
+                          key: const Key('load-new-spreadsheet-button'),
+                          onPressed: onLoadNewSpreadsheet,
+                          style: compact ? compactStyle : null,
+                          icon: const Icon(Icons.upload_file, size: 16),
+                          label: Text(compact
+                              ? 'Outro arquivo'
+                              : 'Carregar outro arquivo'),
+                        ),
+                      ],
+                    ),
+                  ),
                   OutlinedButton.icon(
                     key: const Key('clear-team-b-button'),
                     onPressed: onClearTeamB,
                     style: compact ? compactStyle : null,
                     icon: const Icon(Icons.backspace_outlined, size: 16),
                     label: Text(compact ? 'Limpar B' : 'Limpar Equipe B'),
-                  ),
-                  OutlinedButton.icon(
-                    key: const Key('clear-all-button'),
-                    onPressed: onClearAll,
-                    style: compact ? compactStyle : null,
-                    icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-                    label: const Text('Limpar tudo'),
-                  ),
-                  OutlinedButton.icon(
-                    key: const Key('change-teams-button'),
-                    onPressed: onChangeTeams,
-                    style: compact ? compactStyle : null,
-                    icon: const Icon(Icons.swap_horiz, size: 16),
-                    label: Text(compact ? 'Trocar' : 'Trocar equipes'),
-                  ),
-                  OutlinedButton.icon(
-                    key: const Key('load-new-spreadsheet-button'),
-                    onPressed: onLoadNewSpreadsheet,
-                    style: compact ? compactStyle : null,
-                    icon: const Icon(Icons.upload_file, size: 16),
-                    label: Text(
-                        compact ? 'Outro arquivo' : 'Carregar outro arquivo'),
                   ),
                 ],
               ),

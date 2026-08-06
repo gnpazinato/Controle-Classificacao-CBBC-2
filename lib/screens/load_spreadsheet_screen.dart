@@ -16,6 +16,7 @@ import '../services/pdf_parser_service.dart';
 import '../services/spreadsheet_parser_service.dart';
 import '../services/template_generator_service.dart';
 import '../theme/cbbc_theme.dart';
+import '../utils/app_route_observer.dart';
 import '../utils/template_saver.dart' as platform_saver;
 import '../widgets/cbbc_logo_header.dart';
 import 'match_setup_screen.dart';
@@ -70,7 +71,8 @@ class LoadSpreadsheetScreen extends StatefulWidget {
   State<LoadSpreadsheetScreen> createState() => _LoadSpreadsheetScreenState();
 }
 
-class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
+class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen>
+    with RouteAware {
   late final SpreadsheetParserService _xlsxParser;
   late final PdfParserService _pdfParser;
   late final CacheService _cache;
@@ -111,12 +113,29 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
     _cache.loadLastImportLink().then((String? link) {
       if (mounted && link != null) setState(() => _lastImportLink = link);
     });
+    _checkForUpdate();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferRestore());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ModalRoute<void>? route = ModalRoute.of(context);
+    if (route != null) appRouteObserver.subscribe(this, route);
+  }
+
+  /// Voltou pra tela inicial (saiu de uma partida, da configuração etc.):
+  /// re-checa se saiu release nova. Sem isso, uma atualização publicada
+  /// com o app aberto só apareceria após fechar e reabrir o aplicativo.
+  @override
+  void didPopNext() => _checkForUpdate();
+
+  void _checkForUpdate() {
     (widget._updateChecker ?? UpdateCheckService())
         .check()
         .then((UpdateInfo? info) {
       if (mounted && info != null) setState(() => _updateInfo = info);
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeOfferRestore());
   }
 
   Future<void> _onUpdatePressed(UpdateInfo info) async {
@@ -133,6 +152,7 @@ class _LoadSpreadsheetScreenState extends State<LoadSpreadsheetScreen> {
 
   @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     // Só descarta o serviço criado aqui — instância injetada (testes)
     // pertence a quem injetou.
     if (widget._rosterSync == null) _rosterSync.dispose();

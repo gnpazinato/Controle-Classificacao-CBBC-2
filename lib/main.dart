@@ -8,6 +8,7 @@ import 'screens/public_viewer_screen.dart';
 import 'screens/splash_screen.dart';
 import 'services/wakelock_controller.dart';
 import 'theme/cbbc_theme.dart';
+import 'utils/app_route_observer.dart';
 import 'utils/url_strategy.dart';
 import 'widgets/battery_warning_banner.dart';
 
@@ -52,6 +53,9 @@ class CbbcApp extends StatelessWidget {
       // modo imersivo e esconde o indicador do próprio Android).
       builder: (BuildContext context, Widget? child) =>
           BatteryWarningOverlay(child: child ?? const SizedBox.shrink()),
+      // Notifica a tela inicial quando o usuário volta até ela (gatilho
+      // da re-checagem de atualização do app).
+      navigatorObservers: <NavigatorObserver>[appRouteObserver],
       // A rota inicial é resolvida por onGenerateInitialRoutes (importante na
       // web): `/v/<codigo>` abre SÓ o viewer público — sem empilhar a home
       // (Splash) atrás, senão o timer do Splash trocaria o viewer pela tela

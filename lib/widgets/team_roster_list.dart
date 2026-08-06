@@ -26,6 +26,7 @@ class TeamRosterList extends StatelessWidget {
     required this.team,
     required this.isTeamA,
     required this.selectedIds,
+    this.queuedIds = const <String>[],
     this.onPlayerTap,
     this.shrinkWrap = false,
   });
@@ -34,6 +35,11 @@ class TeamRosterList extends StatelessWidget {
   final Team team;
   final bool isTeamA;
   final Set<String> selectedIds;
+
+  /// Fila de entrada (pré-seleção de substituição), na ordem. Só a tela
+  /// operacional passa; o viewer público não exibe a fila.
+  final List<String> queuedIds;
+
   final ValueChanged<Player>? onPlayerTap;
   final bool shrinkWrap;
 
@@ -106,12 +112,14 @@ class TeamRosterList extends StatelessWidget {
 
   Widget _card(Player p, double slotHeight) {
     final ValueChanged<Player>? onTap = onPlayerTap;
+    final int queueIdx = queuedIds.indexOf(p.id);
     final Widget card = _PlayerCard(
       player: p,
       isTeamA: isTeamA,
       jerseyColor: isTeamA ? state.teamAJerseyColor : state.teamBJerseyColor,
       isBonusEligible: state.qualifiesForBonus(p),
       selected: selectedIds.contains(p.id),
+      queuePosition: queueIdx == -1 ? null : queueIdx + 1,
       height: slotHeight,
       onTap: onTap == null ? null : () => onTap(p),
     );
@@ -130,6 +138,7 @@ class _PlayerCard extends StatelessWidget {
     required this.jerseyColor,
     required this.isBonusEligible,
     required this.selected,
+    this.queuePosition,
     required this.height,
     required this.onTap,
   });
@@ -139,28 +148,50 @@ class _PlayerCard extends StatelessWidget {
   final JerseyColor jerseyColor;
   final bool isBonusEligible;
   final bool selected;
+
+  /// Posição (1-based) na fila de entrada; `null` = fora da fila. Pinta o
+  /// card de laranja com o selo "Nº ENTRA" — visual distinto do azul de
+  /// "em quadra". Nunca coexiste com [selected].
+  final int? queuePosition;
+
   final double height;
   final VoidCallback? onTap;
+
+  // Tom de fundo da pré-seleção (laranja bem claro, análogo ao blueSoft).
+  static const Color _queueSoft = Color(0xFFFDEBDC);
 
   @override
   Widget build(BuildContext context) {
     final double iconSize = (height * 0.78).clamp(22.0, 44.0);
     final double fontSize = (height * 0.32).clamp(11.0, 14.0);
     final double verticalPadding = (height * 0.08).clamp(2.0, 6.0);
+    final bool queued = queuePosition != null;
+    final bool highlighted = selected || queued;
+    final Color accent = queued ? CbbcColors.orange : CbbcColors.blue;
     return Padding(
       padding: EdgeInsets.symmetric(vertical: verticalPadding * 0.4),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         curve: Curves.easeOut,
         decoration: BoxDecoration(
-          color: selected
-              ? CbbcColors.blueSoft.withValues(alpha: 0.7)
-              : CbbcColors.surface,
+          color: queued
+              ? _queueSoft
+              : selected
+                  ? CbbcColors.blueSoft.withValues(alpha: 0.7)
+                  : CbbcColors.surface,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? CbbcColors.blue : CbbcColors.slate200,
-            width: selected ? 1.2 : 1,
+            color: highlighted ? accent : CbbcColors.slate200,
+            width: highlighted ? 1.2 : 1,
           ),
+          boxShadow: queued
+              ? <BoxShadow>[
+                  BoxShadow(
+                    color: CbbcColors.orange.withValues(alpha: 0.35),
+                    blurRadius: 6,
+                  ),
+                ]
+              : null,
         ),
         child: Material(
           color: Colors.transparent,
@@ -170,7 +201,7 @@ class _PlayerCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(8),
             child: Stack(
               children: <Widget>[
-                if (selected)
+                if (highlighted)
                   Positioned(
                     left: 0,
                     top: 4,
@@ -178,14 +209,14 @@ class _PlayerCard extends StatelessWidget {
                     child: Container(
                       width: 3,
                       decoration: BoxDecoration(
-                        color: CbbcColors.blue,
+                        color: accent,
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
                   ),
                 Padding(
                   padding: EdgeInsets.fromLTRB(
-                    selected ? 9 : 6,
+                    highlighted ? 9 : 6,
                     verticalPadding,
                     6,
                     verticalPadding,
@@ -220,6 +251,30 @@ class _PlayerCard extends StatelessWidget {
                           ),
                         ),
                       ),
+                      if (queued) ...<Widget>[
+                        const SizedBox(width: 4),
+                        Container(
+                          key: Key('queue-badge-${player.id}'),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: fontSize * 0.5,
+                            vertical: fontSize * 0.16,
+                          ),
+                          decoration: BoxDecoration(
+                            color: CbbcColors.orange,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '$queuePositionº ENTRA',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: fontSize * 0.72,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                              height: 1,
+                            ),
+                          ),
+                        ),
+                      ],
                       const SizedBox(width: 4),
                       Text(
                         (player.playerClass?.toStringAsFixed(1) ?? '—'),

@@ -50,6 +50,44 @@ class BonusRules {
   }
 }
 
+/// O que aconteceu ao tocar num atleta na tela de jogo — a tela usa isso
+/// pra decidir o aviso mostrado ao usuário.
+enum PlayerTapOutcome {
+  /// Havia vaga em quadra: entrou direto (comportamento clássico).
+  enteredCourt,
+
+  /// Estava em quadra e não havia fila: saiu da quadra (clássico).
+  leftCourt,
+
+  /// Quadra cheia: entrou na fila de entrada (pré-seleção).
+  queued,
+
+  /// Estava na fila e foi tocado de novo: pré-seleção cancelada.
+  unqueued,
+
+  /// Estava em quadra com fila não vazia: o primeiro da fila entrou no
+  /// lugar dele (substituição efetivada).
+  substituted,
+}
+
+class PlayerTapResult {
+  const PlayerTapResult(
+    this.outcome, {
+    this.queuePosition,
+    this.playerIn,
+    this.playerOut,
+  });
+
+  final PlayerTapOutcome outcome;
+
+  /// Posição (1-based) na fila quando [PlayerTapOutcome.queued].
+  final int? queuePosition;
+
+  /// Quem entrou/saiu quando [PlayerTapOutcome.substituted].
+  final Player? playerIn;
+  final Player? playerOut;
+}
+
 class MatchState {
   MatchState({
     required this.teamA,
@@ -59,6 +97,8 @@ class MatchState {
     List<String?>? teamBSlots,
     Set<String>? selectedTeamAIds,
     Set<String>? selectedTeamBIds,
+    List<String>? teamAEntryQueue,
+    List<String>? teamBEntryQueue,
     this.competitionName,
     BonusRules bonusRules = const BonusRules(),
     DateTime? referenceDate,
@@ -70,7 +110,9 @@ class MatchState {
         _teamAJerseyColor = teamAJerseyColor ?? JerseyColor.white,
         _teamBJerseyColor = teamBJerseyColor ?? JerseyColor.darkBlue,
         _teamASlots = _initSlots(teamASlots, fallbackSet: selectedTeamAIds),
-        _teamBSlots = _initSlots(teamBSlots, fallbackSet: selectedTeamBIds);
+        _teamBSlots = _initSlots(teamBSlots, fallbackSet: selectedTeamBIds),
+        _teamAEntryQueue = <String>[...?teamAEntryQueue],
+        _teamBEntryQueue = <String>[...?teamBEntryQueue];
 
   static List<String?> _initSlots(
     List<String?>? slots, {
@@ -106,12 +148,21 @@ class MatchState {
   final JerseyColor _teamBJerseyColor;
   final List<String?> _teamASlots;
   final List<String?> _teamBSlots;
+  final List<String> _teamAEntryQueue;
+  final List<String> _teamBEntryQueue;
 
   double get pointLimit => _pointLimit;
   BonusRules get bonusRules => _bonusRules;
   DateTime get referenceDate => _referenceDate;
   JerseyColor get teamAJerseyColor => _teamAJerseyColor;
   JerseyColor get teamBJerseyColor => _teamBJerseyColor;
+
+  /// Fila de entrada (pré-seleção de substituição), na ordem em que os
+  /// atletas avisaram a mesa. Só existe com a quadra cheia.
+  List<String> get entryQueueTeamAIds =>
+      List<String>.unmodifiable(_teamAEntryQueue);
+  List<String> get entryQueueTeamBIds =>
+      List<String>.unmodifiable(_teamBEntryQueue);
 
   Set<String> get selectedTeamAIds => <String>{
         for (final String? id in _teamASlots)
@@ -212,16 +263,69 @@ class MatchState {
     return true;
   }
 
+  /// Toque num atleta na tela de jogo, com a fila de entrada:
+  ///
+  /// - em quadra + fila não vazia ⇒ o primeiro da fila entra no lugar
+  ///   dele (mesma posição);
+  /// - em quadra + fila vazia ⇒ sai da quadra (clássico);
+  /// - na fila ⇒ pré-seleção cancelada;
+  /// - no banco + vaga em quadra ⇒ entra direto (clássico);
+  /// - no banco + quadra cheia ⇒ entra na fila.
+  ///
+  /// A fila nunca coexiste com vaga em quadra: ela só cresce com a quadra
+  /// cheia e substituições mantêm a quadra cheia.
+  PlayerTapResult tapPlayer(Player player) {
+    final List<String?> slots = _slotsFor(player);
+    final bool isA = identical(slots, _teamASlots);
+    final List<String> queue = isA ? _teamAEntryQueue : _teamBEntryQueue;
+    final Team team = isA ? teamA : teamB;
+
+    final int courtIdx = slots.indexOf(player.id);
+    if (courtIdx != -1) {
+      if (queue.isEmpty) {
+        slots[courtIdx] = null;
+        return const PlayerTapResult(PlayerTapOutcome.leftCourt);
+      }
+      final String inId = queue.removeAt(0);
+      slots[courtIdx] = inId;
+      return PlayerTapResult(
+        PlayerTapOutcome.substituted,
+        playerIn: _findPlayer(team, inId),
+        playerOut: player,
+      );
+    }
+
+    final int queueIdx = queue.indexOf(player.id);
+    if (queueIdx != -1) {
+      queue.removeAt(queueIdx);
+      return const PlayerTapResult(PlayerTapOutcome.unqueued);
+    }
+
+    final int empty = slots.indexOf(null);
+    if (empty != -1) {
+      slots[empty] = player.id;
+      return const PlayerTapResult(PlayerTapOutcome.enteredCourt);
+    }
+
+    queue.add(player.id);
+    return PlayerTapResult(
+      PlayerTapOutcome.queued,
+      queuePosition: queue.length,
+    );
+  }
+
   void clearTeamA() {
     for (int i = 0; i < _teamASlots.length; i++) {
       _teamASlots[i] = null;
     }
+    _teamAEntryQueue.clear();
   }
 
   void clearTeamB() {
     for (int i = 0; i < _teamBSlots.length; i++) {
       _teamBSlots[i] = null;
     }
+    _teamBEntryQueue.clear();
   }
 
   void clearAll() {
@@ -265,6 +369,8 @@ class MatchState {
         'pointLimit': _pointLimit,
         'teamASlots': _teamASlots,
         'teamBSlots': _teamBSlots,
+        'teamAEntryQueue': _teamAEntryQueue,
+        'teamBEntryQueue': _teamBEntryQueue,
         'bonusRules': _bonusRules.toJson(),
         'referenceDate': _referenceDate.toIso8601String(),
         'teamAJerseyColor': _teamAJerseyColor.id,
@@ -279,6 +385,8 @@ class MatchState {
           (json['pointLimit'] as num?)?.toDouble() ?? kDefaultPointLimit,
       teamASlots: _readSlotsJson(json['teamASlots']),
       teamBSlots: _readSlotsJson(json['teamBSlots']),
+      teamAEntryQueue: _readQueueJson(json['teamAEntryQueue']),
+      teamBEntryQueue: _readQueueJson(json['teamBEntryQueue']),
       competitionName: json['competitionName'] as String?,
       bonusRules:
           BonusRules.fromJson(json['bonusRules'] as Map<String, dynamic>?),
@@ -299,5 +407,10 @@ class MatchState {
   static List<String?>? _readSlotsJson(Object? raw) {
     if (raw is! List<dynamic>) return null;
     return raw.map((Object? v) => v as String?).toList(growable: false);
+  }
+
+  static List<String>? _readQueueJson(Object? raw) {
+    if (raw is! List<dynamic>) return null;
+    return raw.whereType<String>().toList(growable: false);
   }
 }
