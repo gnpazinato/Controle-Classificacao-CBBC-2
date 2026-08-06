@@ -24,6 +24,16 @@ link."
 
 ---
 
+## 2.10.0 — 2026-08-06
+
+- **Aviso persistente de bateria baixa.** Abaixo de 30% fora da tomada,
+  um selinho aparece no topo de todas as telas (o app esconde a barra de
+  status do Android no modo imersivo): "Bateria X% — coloque o tablet
+  para carregar". Abaixo de 15% fica vermelho. O toque alterna para um
+  formato compacto (ícone + %) pra não atrapalhar a partida, mas o aviso
+  só some de verdade ao conectar o carregador ou recuperar a carga.
+  Reage na hora ao plugar/desplugar; o nível é relido a cada minuto.
+
 ## 2.9.0 — 2026-08-05
 
 - **Atualização por cima, sem desinstalar.** O APK agora é assinado com

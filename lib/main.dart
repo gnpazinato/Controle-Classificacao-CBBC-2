@@ -9,6 +9,7 @@ import 'screens/splash_screen.dart';
 import 'services/wakelock_controller.dart';
 import 'theme/cbbc_theme.dart';
 import 'utils/url_strategy.dart';
+import 'widgets/battery_warning_banner.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +48,10 @@ class CbbcApp extends StatelessWidget {
       title: 'Controle Classificação CBBC',
       debugShowCheckedModeBanner: false,
       theme: buildCbbcTheme(),
+      // Aviso de bateria baixa por cima de TODAS as telas (o app roda em
+      // modo imersivo e esconde o indicador do próprio Android).
+      builder: (BuildContext context, Widget? child) =>
+          BatteryWarningOverlay(child: child ?? const SizedBox.shrink()),
       // A rota inicial é resolvida por onGenerateInitialRoutes (importante na
       // web): `/v/<codigo>` abre SÓ o viewer público — sem empilhar a home
       // (Splash) atrás, senão o timer do Splash trocaria o viewer pela tela
