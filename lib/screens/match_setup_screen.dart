@@ -69,6 +69,10 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
       _endDate = restored.referenceDate;
     } else {
       _endDate = widget.competitionEndDate ?? _addDays(DateTime.now(), 7);
+      // Bonificação salva com os dados da competição: marcada num jogo
+      // anterior, volta marcada mesmo depois de fechar o app ou desligar
+      // o tablet. (Com partida restaurada, vale a do MatchState acima.)
+      _bonus = widget.sync?.snapshot?.bonusRules ?? _bonus;
     }
     _todayDate = _stripTime(DateTime.now());
     _clearYouthBonusIfBlocked();
@@ -331,7 +335,13 @@ class _MatchSetupScreenState extends State<MatchSetupScreen> {
               _BonusSection(
                 rules: _bonus,
                 playersWithoutDob: _playersWithoutDob,
-                onChanged: (BonusRules r) => setState(() => _bonus = r),
+                onChanged: (BonusRules r) {
+                  setState(() => _bonus = r);
+                  // Só escolhas explícitas do usuário são persistidas —
+                  // o desmarque automático de _clearYouthBonusIfBlocked
+                  // não apaga a preferência salva.
+                  unawaited(widget.sync?.updateBonusRules(r));
+                },
               ),
               const SizedBox(height: 16),
               _DatesSection(

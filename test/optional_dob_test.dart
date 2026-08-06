@@ -1,7 +1,10 @@
+import 'package:controle_classificacao_cbbc/models/match_state.dart';
 import 'package:controle_classificacao_cbbc/models/player.dart';
+import 'package:controle_classificacao_cbbc/models/roster_snapshot.dart';
 import 'package:controle_classificacao_cbbc/models/team.dart';
 import 'package:controle_classificacao_cbbc/screens/match_setup_screen.dart';
 import 'package:controle_classificacao_cbbc/services/import_result.dart';
+import 'package:controle_classificacao_cbbc/services/roster_sync_service.dart';
 import 'package:controle_classificacao_cbbc/services/spreadsheet_parser_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -156,6 +159,34 @@ void main() {
       final SwitchListTile u16 = tester.widget(
           find.byKey(const Key('bonus-u16-checkbox')));
       expect(u16.onChanged, isNotNull);
+    });
+
+    testWidgets('bonificação salva com a competição volta marcada',
+        (WidgetTester tester) async {
+      final List<Team> teams = <Team>[
+        teamWith(club: 'A', withDob: true),
+        teamWith(club: 'B', withDob: true),
+      ];
+      final RosterSyncService sync = RosterSyncService();
+      addTearDown(sync.dispose);
+      // Snapshot restaurado do tablet (app reaberto entre jogos) com a
+      // bonificação Sub-23 escolhida num jogo anterior.
+      await sync.adopt(
+        RosterSnapshot(
+          teams: teams,
+          bonusRules: const BonusRules(youthU23: true),
+        ),
+        persist: false,
+      );
+      await tester.pumpWidget(MaterialApp(
+        home: MatchSetupScreen(teams: teams, sync: sync),
+      ));
+      final SwitchListTile u23 = tester.widget(
+          find.byKey(const Key('bonus-u23-checkbox')));
+      final SwitchListTile u16 = tester.widget(
+          find.byKey(const Key('bonus-u16-checkbox')));
+      expect(u23.value, isTrue);
+      expect(u16.value, isFalse);
     });
   });
 }

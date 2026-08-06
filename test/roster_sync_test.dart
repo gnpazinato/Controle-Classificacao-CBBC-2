@@ -1,3 +1,4 @@
+import 'package:controle_classificacao_cbbc/models/match_state.dart';
 import 'package:controle_classificacao_cbbc/models/player.dart';
 import 'package:controle_classificacao_cbbc/models/roster_snapshot.dart';
 import 'package:controle_classificacao_cbbc/models/team.dart';
@@ -90,6 +91,29 @@ void main() {
       final CacheService cache = CacheService();
       await cache.saveRoster(const RosterSnapshot(teams: <Team>[]));
       expect(await cache.loadRoster(), isNull);
+    });
+
+    test('bonificação sobrevive ao round-trip; snapshot antigo fica null',
+        () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final CacheService cache = CacheService();
+
+      // Snapshot gravado por versão anterior (sem o campo): null, não
+      // "tudo desmarcado".
+      await cache.saveRoster(RosterSnapshot(
+        teams: <Team>[_team('aguias', 'Águias')],
+      ));
+      expect((await cache.loadRoster())!.bonusRules, isNull);
+
+      await cache.saveRoster(RosterSnapshot(
+        teams: <Team>[_team('aguias', 'Águias')],
+        bonusRules: const BonusRules(youthU23: true),
+      ));
+      final RosterSnapshot? loaded = await cache.loadRoster();
+      expect(loaded!.bonusRules, isNotNull);
+      expect(loaded.bonusRules!.youthU23, isTrue);
+      expect(loaded.bonusRules!.youthU16, isFalse);
+      expect(loaded.bonusRules!.female, isFalse);
     });
   });
 
@@ -202,6 +226,41 @@ void main() {
       expect(sync.snapshot!.teams.single.clubName, 'Águias Renomeadas');
       final RosterSnapshot? onDisk = await cache.loadRoster();
       expect(onDisk!.teams.single.clubName, 'Águias Renomeadas');
+    });
+
+    test('updateBonusRules persiste e o re-sync da planilha preserva',
+        () async {
+      SharedPreferences.setMockInitialValues(<String, Object>{});
+      final CacheService cache = CacheService();
+      final _FakeLinkImporter importer = _FakeLinkImporter(<ImportResult>[
+        ImportResult(
+          teams: <Team>[_team('aguias', 'Águias')],
+          issues: const <ImportIssue>[],
+        ),
+      ]);
+      final RosterSyncService sync =
+          RosterSyncService(importer: importer, cache: cache);
+      addTearDown(sync.dispose);
+
+      await sync.adopt(RosterSnapshot(
+        teams: <Team>[_team('aguias', 'Águias')],
+        sourceLink: kLink,
+      ));
+      await sync.updateBonusRules(
+          const BonusRules(youthU16: true, youthU23: true));
+
+      // Persistiu: é o que restaura a seleção depois de fechar o app ou
+      // desligar o tablet entre jogos.
+      RosterSnapshot? onDisk = await cache.loadRoster();
+      expect(onDisk!.bonusRules!.youthU16, isTrue);
+      expect(onDisk.bonusRules!.youthU23, isTrue);
+
+      // O re-sync monta um snapshot novo a partir da planilha — a
+      // bonificação (configuração local) não pode ser perdida.
+      expect(await sync.syncNow(), isTrue);
+      expect(sync.snapshot!.bonusRules!.youthU16, isTrue);
+      onDisk = await cache.loadRoster();
+      expect(onDisk!.bonusRules!.youthU23, isTrue);
     });
 
     test('clear() descarta o elenco salvo', () async {

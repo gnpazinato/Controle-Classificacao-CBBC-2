@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/match_state.dart';
 import '../models/roster_snapshot.dart';
 import '../models/team.dart';
 import 'cache_service.dart';
@@ -83,6 +84,18 @@ class RosterSyncService extends ChangeNotifier {
     await _cache.saveRoster(_snapshot!);
   }
 
+  /// Persiste a bonificação escolhida pra competição junto com o elenco:
+  /// marcada uma vez na tela de configuração, sobrevive a fechamento do
+  /// app e desligamento do tablet, até o usuário escolher "Começar do
+  /// zero" ou importar uma competição nova.
+  Future<void> updateBonusRules(BonusRules rules) async {
+    final RosterSnapshot? current = _snapshot;
+    if (current == null) return;
+    _snapshot = current.copyWith(bonusRules: rules, savedAt: DateTime.now());
+    notifyListeners();
+    await _cache.saveRoster(_snapshot!);
+  }
+
   /// Re-importa a planilha do link agora. Devolve `true` se o elenco foi
   /// atualizado. Silencioso em caso de falha: guarda o erro em
   /// [lastError] e mantém os dados salvos.
@@ -107,6 +120,9 @@ class RosterSyncService extends ChangeNotifier {
             result.competitionEndDate ?? old.competitionEndDate,
         sourceLink: link,
         savedAt: DateTime.now(),
+        // A bonificação é configuração local do tablet, não vem da
+        // planilha — o re-sync não pode apagá-la.
+        bonusRules: old.bonusRules,
       );
       _lastSyncAt = DateTime.now();
       _lastError = null;

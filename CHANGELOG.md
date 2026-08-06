@@ -24,6 +24,16 @@ link."
 
 ---
 
+## 2.11.0 — 2026-08-06
+
+- **Bonificação lembrada entre jogos.** A seleção Sub-16/Sub-23/feminina
+  agora é salva junto com os dados da competição no tablet: marca uma
+  vez e ela volta marcada nos próximos jogos, mesmo fechando o app ou
+  desligando o tablet. O re-sync da planilha não apaga a escolha. Ela
+  zera ao importar uma competição nova ou escolher "Começar do zero".
+  O bloqueio automático (atleta sem data de nascimento) continua valendo
+  e não sobrescreve a preferência salva.
+
 ## 2.10.1 — 2026-08-06
 
 - **Badge de nome + placar da quadra 25% maior.** A pílula
