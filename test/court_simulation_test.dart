@@ -66,14 +66,15 @@ Widget _courtMock({
   final double slotMaxHeight = courtH * 0.16;
   final double badgeMargin = courtW * 0.018;
 
-  // Mesmas fórmulas do _CourtTeamBadge.
-  final double fontScore = courtW * 0.048;
+  // Mesmas fórmulas do _CourtTeamBadge (fator 1.25 da v2.10.1).
+  const double badgeScale = 1.25;
+  final double fontScore = courtW * 0.048 * badgeScale;
   final double fontLimit = fontScore * 0.75;
-  final double fontName = courtW * 0.038;
-  final double padH = courtW * 0.024;
-  final double padV = courtW * 0.016;
-  final double radius = courtW * 0.022;
-  final double gap = courtW * 0.016;
+  final double fontName = courtW * 0.038 * badgeScale;
+  final double padH = courtW * 0.024 * badgeScale;
+  final double padV = courtW * 0.016 * badgeScale;
+  final double radius = courtW * 0.022 * badgeScale;
+  final double gap = courtW * 0.016 * badgeScale;
 
   Widget badge(
     String name,

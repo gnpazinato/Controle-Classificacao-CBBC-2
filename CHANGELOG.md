@@ -24,6 +24,14 @@ link."
 
 ---
 
+## 2.10.1 — 2026-08-06
+
+- **Badge de nome + placar da quadra 25% maior.** A pílula
+  "NOME | pontos / limite" nas faixas do topo e da base da quadra ficou
+  25% maior (fonte, paddings e raio, tudo proporcional) pra melhorar a
+  leitura à distância. Chips, formação e margens não mudaram; opção
+  aprovada via prévia HTML comparando +25/+45/+65%.
+
 ## 2.10.0 — 2026-08-06
 
 - **Aviso persistente de bateria baixa.** Abaixo de 30% fora da tomada,

@@ -286,14 +286,19 @@ class _CourtTeamBadge extends StatelessWidget {
     // Linha única "NOME | pontos / limite" ocupando a faixa livre acima
     // (A) / abaixo (B) da formação. Proporcional à largura da quadra, sem
     // clamps absolutos — mesma convenção dos chips.
-    final double fontScore = anchor * 0.048;
+    //
+    // O fator 1.25 amplia a pílula pra leitura à distância mantendo folga
+    // da faixa dos chips: a pílula termina em ~11.8% de w e a estrela do
+    // chip mais próximo só começa em ~19.6% (colidiria a partir de ~1.9).
+    const double scale = 1.25;
+    final double fontScore = anchor * 0.048 * scale;
     final double fontLimit = fontScore * 0.75;
-    final double fontName = anchor * 0.038;
-    final double padH = anchor * 0.024;
-    final double padV = anchor * 0.016;
+    final double fontName = anchor * 0.038 * scale;
+    final double padH = anchor * 0.024 * scale;
+    final double padV = anchor * 0.016 * scale;
     final double iconSize = fontScore * 0.90;
-    final double radius = anchor * 0.022;
-    final double gap = anchor * 0.016;
+    final double radius = anchor * 0.022 * scale;
+    final double gap = anchor * 0.016 * scale;
     final Widget pill = AnimatedContainer(
       duration: const Duration(milliseconds: 180),
       curve: Curves.easeOut,
