@@ -24,6 +24,13 @@ link."
 
 ---
 
+## 2.12.1 — 2026-08-06
+
+- **Sem notificações na substituição.** Removidos os avisos (snackbar)
+  que apareciam ao entrar na fila, sair da fila e efetivar a troca —
+  feedback que não foi solicitado. O card laranja com o selo "Nº ENTRA"
+  continua indicando a fila; a lógica de substituição não mudou.
+
 ## 2.12.0 — 2026-08-06
 
 - **Substituição com pré-seleção (fila de entrada).** Com a quadra

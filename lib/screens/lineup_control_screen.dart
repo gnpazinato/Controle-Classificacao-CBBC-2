@@ -226,31 +226,8 @@ class _LineupControlScreenState extends State<LineupControlScreen> {
   }
 
   void _onPlayerTap(Player player, _Side side) {
-    final PlayerTapResult result = _state.tapPlayer(player);
+    _state.tapPlayer(player);
     setState(() {});
-    switch (result.outcome) {
-      case PlayerTapOutcome.queued:
-        _showSnack(
-          'Nº ${player.shirtNumber} na fila de entrada '
-          '(${result.queuePosition}º). Toque em quem sai.',
-          duration: const Duration(seconds: 3),
-        );
-      case PlayerTapOutcome.unqueued:
-        _showSnack(
-          'Nº ${player.shirtNumber} saiu da fila de entrada.',
-          duration: const Duration(seconds: 2),
-        );
-      case PlayerTapOutcome.substituted:
-        _showSnack(
-          'Troca: nº ${result.playerIn!.shirtNumber} entrou no lugar '
-          'da nº ${result.playerOut!.shirtNumber}.',
-          duration: const Duration(seconds: 3),
-        );
-      case PlayerTapOutcome.enteredCourt:
-      case PlayerTapOutcome.leftCourt:
-        // Gestos clássicos: sem aviso, como sempre foi.
-        break;
-    }
     _checkLimitCrossing();
     unawaited(_persist());
     _pushBroadcast();
